@@ -15,9 +15,9 @@
 #define LEVEL_DESC_MAX 64
 
 // Hard-coded constants for now
-#define LEVEL_MAX_LINEDEFS 256
-#define LEVEL_MAX_POLYGONS 256
-#define LEVEL_MAX_ENTITIES 256
+#define LEVEL_MAX_LINEDEFS 512
+#define LEVEL_MAX_POLYGONS 512
+#define LEVEL_MAX_ENTITIES 512
 #define GAME_ENTITY_LIMIT 1024
 
 struct state_level

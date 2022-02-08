@@ -32,7 +32,7 @@ main (i32 argc, char **argv)
 
     state_level_init();
 
-    strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-Ab.map");
+    strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-Bb.map");
 
     // Set up SDL window
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -55,18 +55,45 @@ main (i32 argc, char **argv)
     // Initialise renderer
     if (renderer_init(win_handle) < 0) goto game_quit;
 
+    static vec3s cam_pos = (vec3s)GLMS_VEC3_ZERO_INIT;
+
     SDL_Event event;
     for (;;)
     {
         // Poll inputs
+        static const f32 CAM_MOVE_SPEED = 50.0f;
+        vec3s cam_add = GLMS_VEC3_ZERO_INIT;
         while (SDL_PollEvent(&event))
         {
             switch(event.type)
             {
-            case SDL_QUIT: goto game_quit;
-            default: break;
+            case SDL_KEYDOWN:
+            {
+                switch(event.key.keysym.sym)
+                {
+                case SDLK_h:
+                    cam_add.x += CAM_MOVE_SPEED;
+                    break;
+                case SDLK_j:
+                    cam_add.y -= CAM_MOVE_SPEED;
+                    break;
+                case SDLK_k:
+                    cam_add.y += CAM_MOVE_SPEED;
+                    break;
+                case SDLK_l:
+                    cam_add.x -= CAM_MOVE_SPEED;
+                    break;
+                default: 
+                    break;
+                }
+            } break;
+            case SDL_QUIT: 
+                goto game_quit;
+            default: 
+                break;
             }
         }
+        cam_pos = glms_vec3_add(cam_pos, cam_add);
 
         // Main state machine loop
         switch (g_state.type)
@@ -119,7 +146,7 @@ main (i32 argc, char **argv)
         }
 
         // Render this frame
-        renderer_render();
+        renderer_render(cam_pos);
     }
 game_quit:
 

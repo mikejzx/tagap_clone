@@ -47,15 +47,28 @@ static i32 vulkan_get_physical_device(void);
 static i32 vulkan_create_logical_device(void);
 static i32 vulkan_create_allocator(void);
 static i32 vulkan_create_render_pass(void);
+static i32 vulkan_create_descriptor_set_layout(void);
 static i32 vulkan_create_graphics_pipeline(void);
 static i32 vulkan_create_command_pool(void);
 static i32 vulkan_create_sync_objects(void);
 static i32 vulkan_create_command_buffers(void);
+static i32 vulkan_create_descriptor_pool(void);
+static i32 vulkan_create_descriptor_sets(void);
+static i32 vulkan_create_texture_image(void);
+static i32 vulkan_create_texture_imageview(void);
+
+static VkCommandBuffer vulkan_begin_oneshot_cmd(void);
+static i32 vulkan_end_oneshot_cmd(VkCommandBuffer);
 
 struct push_constants
 {
     mat4s mvp;
 };
+
+static VkImage tex_image;
+static VmaAllocation tex_image_alloc;
+static VkImageView tex_imageview;
+static VkSampler tex_sampler;
 
 static inline bool
 is_qfam_complete(struct queue_family *qfam, u32 count)
@@ -85,10 +98,15 @@ vulkan_renderer_init(SDL_Window *handle)
     (status = vulkan_create_allocator()) < 0 ||
     (status = vulkan_swapchain_create(swapchain)) < 0 ||
     (status = vulkan_create_render_pass()) < 0 ||
+    (status = vulkan_create_descriptor_set_layout() < 0) ||
     (status = vulkan_create_graphics_pipeline()) < 0 ||
     (status = vulkan_swapchain_create_framebuffers(swapchain)) < 0 ||
     (status = vulkan_create_command_pool() < 0) ||
     (status = vulkan_create_sync_objects() < 0) ||
+    (status = vulkan_create_texture_image() < 0) ||
+    (status = vulkan_create_texture_imageview() < 0) ||
+    (status = vulkan_create_descriptor_pool() < 0) ||
+    (status = vulkan_create_descriptor_sets() < 0) ||
     (status = vulkan_create_command_buffers() < 0));
     return status;
 }
@@ -104,6 +122,10 @@ vulkan_renderer_deinit(void)
 {
     LOG_INFO("[vulkan] cleanup");
     vulkan_renderer_wait_for_idle();
+
+    vkDestroySampler(g_vulkan->d, tex_sampler, NULL);
+    vkDestroyImageView(g_vulkan->d, tex_imageview, NULL);
+    vmaDestroyImage(g_vulkan->vma, tex_image, tex_image_alloc);
 
     if (in_flight_images) free(in_flight_images);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -125,8 +147,11 @@ vulkan_renderer_deinit(void)
     vulkan_swapchain_deinit_framebuffers(swapchain);
     vkDestroyPipeline(g_vulkan->d, g_vulkan->pipeline, NULL);
     vkDestroyPipelineLayout(g_vulkan->d, g_vulkan->pipeline_layout, NULL);
+    vkDestroyDescriptorSetLayout(g_vulkan->d, g_vulkan->desc_set_layout, NULL);
     vkDestroyRenderPass(g_vulkan->d, g_vulkan->render_pass, NULL);
     vulkan_swapchain_deinit(swapchain);
+    vkDestroyDescriptorPool(g_vulkan->d, g_vulkan->desc_pool, NULL);
+    if (g_vulkan->desc_sets) free(g_vulkan->desc_sets);
     vmaDestroyAllocator(g_vulkan->vma);
     vkDestroyDevice(g_vulkan->d, NULL);
     vkDestroySurfaceKHR(g_vulkan->instance, g_vulkan->surface, NULL);
@@ -614,6 +639,34 @@ vulkan_create_render_pass(void)
     return 0;
 }
 
+static i32
+vulkan_create_descriptor_set_layout(void)
+{
+    const VkDescriptorSetLayoutBinding sampler_layout_binding =
+    {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .pImmutableSamplers = NULL,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    const VkDescriptorSetLayoutCreateInfo layout_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &sampler_layout_binding,
+    };
+    if (vkCreateDescriptorSetLayout(g_vulkan->d, 
+        &layout_info, NULL, &g_vulkan->desc_set_layout) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create descriptor set layout");
+        return -1;
+    }
+
+    return 0;
+}
+
 VkShaderModule
 create_shader_module(const u32 *buf, size_t len)
 {
@@ -769,12 +822,13 @@ vulkan_create_graphics_pipeline(void)
         .depthClampEnable = VK_FALSE,
         // Can modify this for wireframe mode
         .polygonMode = VK_POLYGON_MODE_FILL,
+        //.polygonMode = VK_POLYGON_MODE_LINE,
         .lineWidth = 1.0f,
         .cullMode = VK_CULL_MODE_BACK_BIT,
 
         // Flip faces because we render with flipped Y
-        //.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, 
-        .frontFace = VK_FRONT_FACE_CLOCKWISE, 
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, 
+        //.frontFace = VK_FRONT_FACE_CLOCKWISE, 
     };
 
     /*
@@ -825,6 +879,8 @@ vulkan_create_graphics_pipeline(void)
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pPushConstantRanges = &push_consts,
         .pushConstantRangeCount = 1,
+        .setLayoutCount = 1,
+        .pSetLayouts = &g_vulkan->desc_set_layout,
     };
     if (vkCreatePipelineLayout(g_vulkan->d, 
         &pipeline_layout_info, NULL, &g_vulkan->pipeline_layout) != VK_SUCCESS)
@@ -927,7 +983,8 @@ vulkan_create_command_buffers(void)
 i32
 vulkan_record_command_buffers(
     struct renderable *objs, 
-    size_t obj_count)
+    size_t obj_count,
+    vec3s cam_pos)
 {
     VkCommandBuffer cbuf = g_vulkan->cmd_buffers[cur_image_index];
 
@@ -992,7 +1049,10 @@ vulkan_record_command_buffers(
         {
             m_m = glms_rotate_z(m_m, glm_rad(objs[o].rot));
         }
-        static mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
+        m_m.raw[1][1] *= -1.0f;
+        mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
+        m_v = glms_translate(m_v, 
+            (vec3s){ cam_pos.x, cam_pos.y, 0.0f });
         mat4s m_p = glms_ortho(
             0.0f, (f32)swapchain->extent.width, 
             0.0f, (f32)swapchain->extent.height,
@@ -1007,6 +1067,14 @@ vulkan_record_command_buffers(
             0,
             sizeof(struct push_constants),
             &pconsts);
+
+        // Bind descriptor sets
+        vkCmdBindDescriptorSets(cbuf, 
+            VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            g_vulkan->pipeline_layout,
+            0, 1, 
+            &g_vulkan->desc_sets[cur_image_index],
+            0, NULL);
 
         // Draw!
         vkCmdDrawIndexed(cbuf, 
@@ -1150,6 +1218,157 @@ vulkan_render_frame(void)
     return 0;
 }
 
+static VkCommandBuffer
+vulkan_begin_oneshot_cmd(void)
+{
+    // TODO: use temporary command pool for these short-lived command buffers?
+    const VkCommandBufferAllocateInfo alloc_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = g_vulkan->cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(g_vulkan->d, &alloc_info, 
+        &cmdbuf) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to allocate command buffer");
+        return VK_NULL_HANDLE;
+    }
+    // Record command buffer
+    const VkCommandBufferBeginInfo begin_info = 
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    if (vkBeginCommandBuffer(cmdbuf, &begin_info) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to begin recording command buffer");
+        return VK_NULL_HANDLE;
+    }
+
+    return cmdbuf;
+}
+
+static i32
+vulkan_end_oneshot_cmd(VkCommandBuffer cmdbuf)
+{
+    // End recording
+    if (vkEndCommandBuffer(cmdbuf) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to record command buffer");
+        goto fail;
+    }
+
+    // Submit the command
+    const VkSubmitInfo submit_info = 
+    {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmdbuf,
+    };
+    if (vkQueueSubmit(
+        g_vulkan->qfams[VKQ_GRAPHICS].queue, 
+        1, 
+        &submit_info, 
+        VK_NULL_HANDLE) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to submit buffer transfer command buffer!");
+        goto fail;
+    }
+
+    // Wait for command to complete
+    vkQueueWaitIdle(g_vulkan->qfams[VKQ_GRAPHICS].queue);
+
+    // Free the staging buffer as we no longer need it
+    vkFreeCommandBuffers(g_vulkan->d, g_vulkan->cmd_pool, 1, &cmdbuf);
+    return 0;
+fail:
+    vkFreeCommandBuffers(g_vulkan->d, g_vulkan->cmd_pool, 1, &cmdbuf);
+    return -1;
+}
+
+static i32
+vulkan_create_descriptor_pool()
+{
+    VkDescriptorPoolSize pool_size =
+    {
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = swapchain->image_count,
+    };
+    VkDescriptorPoolCreateInfo pool_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .poolSizeCount = 1,
+        .pPoolSizes = &pool_size,
+        .maxSets = swapchain->image_count,
+    };
+    if (vkCreateDescriptorPool(g_vulkan->d,
+        &pool_info, NULL, &g_vulkan->desc_pool) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create descriptor pool");
+        return -1;
+    }
+
+    return 0;
+}
+
+static i32
+vulkan_create_descriptor_sets(void)
+{
+    VkDescriptorSetLayout *layouts = 
+        malloc(swapchain->image_count * sizeof(VkDescriptorSetLayout));
+    for (u32 i = 0; i < swapchain->image_count; ++i)
+    {
+        layouts[i] = g_vulkan->desc_set_layout;
+    }
+    const VkDescriptorSetAllocateInfo alloc_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = g_vulkan->desc_pool,
+        .descriptorSetCount = swapchain->image_count,
+        .pSetLayouts = layouts,
+    };
+
+    // Allocate descriptor sets
+    g_vulkan->desc_sets = 
+        malloc(swapchain->image_count * sizeof(VkDescriptorSet));
+    if (vkAllocateDescriptorSets(g_vulkan->d, 
+        &alloc_info, g_vulkan->desc_sets) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to allocate descriptor sets");
+        free(layouts);
+        return -1;
+    }
+    free(layouts);
+
+    for (u32 i = 0; i < swapchain->image_count; ++i)
+    {
+        const VkDescriptorImageInfo image_info =
+        {
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .imageView = tex_imageview,
+            .sampler = tex_sampler,
+        };
+
+        const VkWriteDescriptorSet desc_write =
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = g_vulkan->desc_sets[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .pImageInfo = &image_info,
+        };
+
+        vkUpdateDescriptorSets(g_vulkan->d, 1, &desc_write, 0, NULL);
+    }
+
+    return 0;
+}
+
 i32
 vulkan_create_buffer(
     VkDeviceSize size, 
@@ -1189,32 +1408,8 @@ vulkan_create_buffer(
 i32 
 vulkan_copy_buffer(VkBuffer a, VkBuffer b, size_t size)
 {
-    // TODO: use temporary command pool for these short-lived command buffers?
-    const VkCommandBufferAllocateInfo alloc_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = g_vulkan->cmd_pool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
-    if (vkAllocateCommandBuffers(g_vulkan->d, &alloc_info, 
-            &cmdbuf) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to allocate command buffer");
-        goto fail;
-    }
-    // Record command buffer
-    const VkCommandBufferBeginInfo begin_info = 
-    {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    };
-    if (vkBeginCommandBuffer(cmdbuf, &begin_info) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to begin recording command buffer");
-        goto fail;
-    }
+    VkCommandBuffer cmdbuf;
+    if ((cmdbuf = vulkan_begin_oneshot_cmd()) == VK_NULL_HANDLE) return -1;
 
     // Set buffers to copy
     const VkBufferCopy copy_region = 
@@ -1225,38 +1420,259 @@ vulkan_copy_buffer(VkBuffer a, VkBuffer b, size_t size)
     };
     vkCmdCopyBuffer(cmdbuf, a, b, 1, &copy_region);
 
-    // End recording
-    if (vkEndCommandBuffer(cmdbuf) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to record command buffer");
-        goto fail;
-    }
+    if (vulkan_end_oneshot_cmd(cmdbuf) < 0) return -1;
 
-    // Submit the command
-    const VkSubmitInfo submit_info = 
-    {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &cmdbuf,
-    };
-    if (vkQueueSubmit(
-        g_vulkan->qfams[VKQ_GRAPHICS].queue, 
-        1, 
-        &submit_info, 
-        VK_NULL_HANDLE) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to submit buffer transfer command buffer!");
-        goto fail;
-    }
-
-    // Wait for command to complete
-    vkQueueWaitIdle(g_vulkan->qfams[VKQ_GRAPHICS].queue);
-
-    // Free the staging buffer as we no longer need it
-    vkFreeCommandBuffers(g_vulkan->d, g_vulkan->cmd_pool, 1, &cmdbuf);
     return 0;
+}
 
+static i32
+vulkan_copy_buffer_to_image(VkBuffer buffer, VkImage img, u32 w, u32 h)
+{
+    VkCommandBuffer cmdbuf;
+    if ((cmdbuf = vulkan_begin_oneshot_cmd()) == VK_NULL_HANDLE) return -1;
+
+    const VkBufferImageCopy rgn =
+    {
+        // Tightly packed
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        // Which parts we want to copy
+        .imageSubresource =
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+        .imageOffset = { 0, 0, 0 },
+        .imageExtent = 
+        {
+            w, h, 1
+        },
+    };
+
+    vkCmdCopyBufferToImage(cmdbuf,
+        buffer,
+        img,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &rgn);
+
+    if (vulkan_end_oneshot_cmd(cmdbuf) < 0) return -1;
+    return 0;
+}
+
+static i32 
+transition_image_layout(VkImage img, VkFormat fmt,
+    VkImageLayout layout_old, VkImageLayout layout_new)
+{
+    VkCommandBuffer cmdbuf;
+    if ((cmdbuf = vulkan_begin_oneshot_cmd()) == VK_NULL_HANDLE) return -1;
+
+    VkImageMemoryBarrier barrier =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout = layout_old,
+        .newLayout = layout_new,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = img,
+        .subresourceRange =
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+
+    VkPipelineStageFlags src_stage, dst_stage;
+    // undefined --> transfer destination: transfer writes don't need to wait
+    //                                     for anything
+    if (layout_old == VK_IMAGE_LAYOUT_UNDEFINED &&
+        layout_new == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (layout_old == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+        layout_new == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        LOG_ERROR("[vulkan] unsupported layout transition");
+        vulkan_end_oneshot_cmd(cmdbuf);
+        return -1;
+    }
+    
+    vkCmdPipelineBarrier(cmdbuf,
+        src_stage,
+        dst_stage,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier);
+
+    if (vulkan_end_oneshot_cmd(cmdbuf) < 0) return -1;
+    return 0;
+}
+
+static i32 
+vulkan_create_texture_image(void)
+{
+    // Load texture data
+#define TEX_PATH "data/art/textures/concrete.tga"
+    i32 tex_w, tex_h, tex_c;
+    stbi_uc *pixels = stbi_load(TEX_PATH,
+        &tex_w, &tex_h, &tex_c, STBI_rgb_alpha);
+    VkDeviceSize image_size = tex_w * tex_h * 4;
+    if (!pixels)
+    {
+        LOG_ERROR("[stb_image] failed to load texture");
+        return -1;
+    }
+
+    LOG_DBUG("[stb_image] loaded image '%s'", TEX_PATH);
+
+    // Create staging buffer
+    VkBuffer staging_buf;
+    VmaAllocation staging_buf_alloc;
+    if (vulkan_create_buffer(
+        image_size, 
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_CPU_ONLY,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &staging_buf, 
+        &staging_buf_alloc) < 0)
+    {
+        LOG_ERROR("[vulkan] failed to create staging buffer!");
+        return -1;
+    }
+
+    // Copy pixel data
+    void *data;
+    vmaMapMemory(g_vulkan->vma, staging_buf_alloc, &data);
+    memcpy(data, pixels, image_size);
+    vmaUnmapMemory(g_vulkan->vma, staging_buf_alloc);
+
+    const VkImageCreateInfo image_info = 
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .extent =
+        {
+            .width = tex_w,
+            .height = tex_h,
+            .depth = 1,
+        },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .flags = 0,
+    };
+    const VmaAllocationCreateInfo image_alloc_info = 
+    {
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    };
+    if (vmaCreateImage(g_vulkan->vma, 
+        &image_info, 
+        &image_alloc_info, 
+        &tex_image, 
+        &tex_image_alloc, NULL) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create image");
+        goto fail;
+    }
+
+    // Transition image layout, and copy buffer
+    transition_image_layout(tex_image, VK_FORMAT_R8G8B8A8_SRGB,
+        VK_IMAGE_LAYOUT_UNDEFINED, 
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    vulkan_copy_buffer_to_image(staging_buf, tex_image, tex_w, tex_h);
+
+    // Prepare for shader access
+    transition_image_layout(tex_image, VK_FORMAT_R8G8B8A8_SRGB,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    stbi_image_free(pixels);
+    vmaDestroyBuffer(g_vulkan->vma, staging_buf, staging_buf_alloc);
+    return 0;
 fail:
-    vkFreeCommandBuffers(g_vulkan->d, g_vulkan->cmd_pool, 1, &cmdbuf);
+    stbi_image_free(pixels);
+    vmaDestroyBuffer(g_vulkan->vma, staging_buf, staging_buf_alloc);
     return -1;
+}
+
+static i32 
+vulkan_create_texture_imageview(void)
+{
+    // Create imageview
+    VkImageViewCreateInfo create_info = 
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = tex_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .subresourceRange = 
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+    if (vkCreateImageView(g_vulkan->d,
+        &create_info, 
+        NULL, 
+        &tex_imageview) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create image view for texture");
+        return -1;
+    }
+
+    // Create sampler
+    const VkSamplerCreateInfo sampler_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST, //VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_NEAREST, //VK_FILTER_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1,
+        .unnormalizedCoordinates = VK_FALSE,
+        .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .mipLodBias = 0.0f,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
+    };
+    if (vkCreateSampler(g_vulkan->d,
+        &sampler_info, NULL, &tex_sampler) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create texture sampler");
+        return -1;
+    }
+
+    return 0;
 }

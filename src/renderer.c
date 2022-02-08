@@ -17,29 +17,6 @@ renderer_init(SDL_Window *winhandle)
 
     g_renderer.objs = malloc(MAX_OBJECTS * sizeof(struct renderable));
 
-    // Create temporary renderable objects
-#if 0
-    {
-        const struct vertex vertices[] = 
-        {
-            { 10.0f, 10.0f, }, // Top left
-            { 200.0f, 200.0f, }, // Bottom right
-            { 10.0f, 200.0f, }, // Bottom left
-            { 200.0f, 10.0f, }, // Top right
-        };
-        const u16 indices[] = 
-        {
-            0, 1, 2, 
-            0, 3, 1,
-        };
-        struct renderable *r = get_renderable();
-        vb_new(&r->vb, vertices, sizeof(vertices));
-        ib_new(&r->ib, indices, sizeof(indices));
-        r->pos = (vec2s){{ 0.0f, 1.0f }};
-        r->rot = 0.0f;
-    }
-#endif
-
     return 0;
 }
 
@@ -60,16 +37,14 @@ renderer_deinit(void)
 }
 
 void 
-renderer_render(void)
+renderer_render(vec3s cam_pos)
 {
-    g_renderer.objs[0].pos = (vec2s){{ SDL_GetTicks() / 10.0f, 200.0f }};
-    g_renderer.objs[0].rot = SDL_GetTicks() / 1.0f;
-
     // Record command buffers and render
     vulkan_render_frame_pre();
     vulkan_record_command_buffers(
         g_renderer.objs, 
-        g_renderer.obj_count);
+        g_renderer.obj_count,
+        cam_pos);
     vulkan_render_frame();
 }
 
@@ -93,7 +68,26 @@ renderer_add_polygon(struct tagap_polygon *p)
     struct renderable *r = get_renderable();
     memset(r, 0, sizeof(struct renderable));
 
-    vb_new(&r->vb, p->points, sizeof(vec2s) * p->point_count);
+    u32 tex_width = 128, tex_height = 128;
+
+    size_t vertices_size = sizeof(struct vertex) * p->point_count;
+    struct vertex *vertices = malloc(vertices_size);
+    for (u32 i = 0; i < p->point_count; ++i)
+    {
+        vertices[i] = (struct vertex)
+        {
+            .pos = p->points[i],
+            .texcoord = (vec2s)
+            {{ 
+                 (p->points[i].x - p->points[p->tex_offset_point].x) 
+                     / (f32)tex_width,
+                 (p->points[i].y - p->points[p->tex_offset_point].y) 
+                     / (f32)tex_height,
+            }},
+        };
+    }
+    vb_new(&r->vb, vertices, vertices_size);
+    free(vertices);
 
     // Calculate indices
     i32 tri_count = p->point_count - 2;

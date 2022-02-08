@@ -4,14 +4,15 @@ DIRS=\
 
 SRCS=$(shell find -L src -name '*.c' | grep -P '.*\.c$$')
 
-CFLAGS_ALL=-D_GNU_SOURCE -Wall
+CFLAGS_ALL=-D_GNU_SOURCE -Wall -std=c99
 CFLAGS_RELEASE=$(CFLAGS_ALL) -march=native -mtune=native -O2 -Wpedantic
 CFLAGS_DEBUG=$(CFLAGS_ALL) -Og -g -DDEBUG -Wno-missing-braces
 
 LDFLAGS=-lm -lpthread -lvulkan \
 	-lSDL2main $(shell pkg-config --libs --cflags sdl2) \
-	-Ilib/cglm/include -Llib/cglm/build -lcglm \
-	-Ilib/vma/include -Llib/vma/build/src -lVulkanMemoryAllocator
+	-Ilib/cglm/include -Llib/cglm/build -l:libcglm.a \
+	-Ilib/vma/include -Llib/vma/build/src -lVulkanMemoryAllocator \
+	-Ilib/stb_image -Llib/stb_image -l:libstb_image.a
 
 # 'MODE' environment variable used to make distribution build
 ifeq ($(MODE),dist)

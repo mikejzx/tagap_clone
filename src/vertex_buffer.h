@@ -21,6 +21,9 @@ struct vertex
 {
     // Vertex positions
     vec2s pos;
+
+    // Texcoords
+    vec2s texcoord;
 };
 
 static const VkVertexInputBindingDescription VERTEX_BINDING_DESC = 
@@ -38,6 +41,12 @@ static const VkVertexInputAttributeDescription VERTEX_ATTR_DESC[] =
         .location = 0,
         .format = VK_FORMAT_R32G32_SFLOAT,
         .offset = offsetof(struct vertex, pos),
+    },
+    {
+        .binding = 0,
+        .location = 1,
+        .format = VK_FORMAT_R32G32_SFLOAT,
+        .offset = offsetof(struct vertex, texcoord),
     },
 };
 static const u32 VERTEX_ATTR_COUNT = 

@@ -269,6 +269,7 @@ tagap_script_run(const char *fpath)
             {
                 cur_parse_mode = TAGAP_PARSE_POLYGON;
 
+                // Copy texture name
                 struct tagap_polygon *cur_poly = 
                     &lvl->polygons[lvl->polygon_count++];
                 strcpy(cur_poly->tex_name, token);
@@ -295,6 +296,14 @@ tagap_script_run(const char *fpath)
             // Define point on current polygon
             case ATOM_POLYPOINT:
             {
+                // Don't exceed maximum polygons
+                if (lvl->polygon_count + 1 >= LEVEL_MAX_POLYGONS)
+                {
+                    LOG_ERROR("[tagap_script] polygon limit exceeded (%d)",
+                        LEVEL_MAX_POLYGONS);
+                    return -1;
+                }
+
                 struct tagap_polygon *cur_poly = 
                     &lvl->polygons[lvl->polygon_count - 1];
                 vec2s *point = &cur_poly->points[cur_poly->point_count++];

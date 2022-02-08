@@ -47,6 +47,9 @@ struct vulkan_renderer
     struct queue_family qfams[VKQ_COUNT];
 
     VkRenderPass render_pass;
+    VkDescriptorSetLayout desc_set_layout;
+    VkDescriptorSet *desc_sets;
+    VkDescriptorPool desc_pool;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline; // Graphics pipeline
     VkCommandPool cmd_pool;
@@ -69,7 +72,7 @@ i32 vulkan_create_buffer(VkDeviceSize,
 i32 vulkan_copy_buffer(VkBuffer, VkBuffer, size_t);
 
 i32 vulkan_render_frame_pre(void);
-i32 vulkan_record_command_buffers(struct renderable *, size_t);
+i32 vulkan_record_command_buffers(struct renderable *, size_t, vec3s);
 i32 vulkan_render_frame(void);
 
 #endif

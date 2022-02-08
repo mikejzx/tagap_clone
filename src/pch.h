@@ -21,6 +21,7 @@
 #include <vulkan/vulkan.h>
 #include <cglm/struct.h>
 #include <vk_mem_alloc.h>
+#include <stb_image.h>
 
 // Local includes
 #include "types.h"
