@@ -1,0 +1,6 @@
+Makefile.old
+data/*
+lib/*
+tmpfs_env.sh
+bin/*
+shader/*.spv
