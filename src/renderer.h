@@ -2,9 +2,9 @@
 #define RENDERER_H
 
 #include "types.h"
-#include "vertex_buffer.h"
 #include "index_buffer.h"
 #include "tagap_polygon.h"
+#include "vertex_buffer.h"
 
 /*
  * renderer.h
@@ -12,12 +12,13 @@
  * Issues all draw commands, etc.
  */
 
-#define MAX_OBJECTS 512
+#define MAX_OBJECTS 1024
 
 struct renderable
 {
     struct vbuffer vb;
     struct ibuffer ib;
+    i32 tex;
     vec2s pos;
     f32 rot;
 };

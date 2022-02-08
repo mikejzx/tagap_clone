@@ -19,8 +19,10 @@
  *   the renderer
  */
 
-#define WIDTH 800 //1280
-#define HEIGHT 600 //720
+#define WIDTH 1280 //800
+#define HEIGHT 720 //600
+
+#define MAX_TEXTURES 256
 
 enum vulkan_queue_id
 {
@@ -55,6 +57,18 @@ struct vulkan_renderer
     VkCommandPool cmd_pool;
     VkCommandBuffer *cmd_buffers;
     u32 cmd_buffer_count;
+
+    // Textures
+    VkSampler sampler;
+    struct vulkan_texture
+    {
+        VkImage image;
+        VmaAllocation alloc;
+        VkImageView view;
+        char name[256];
+        u32 w, h;
+    } textures[MAX_TEXTURES];
+    i32 tex_used;
 };
 
 extern struct vulkan_renderer *g_vulkan;
@@ -63,16 +77,21 @@ void vulkan_renderer_init_state(void);
 i32 vulkan_renderer_init(SDL_Window *);
 void vulkan_renderer_deinit(void);
 void vulkan_renderer_wait_for_idle(void);
-i32 vulkan_create_buffer(VkDeviceSize, 
+i32 vulkan_create_buffer(VkDeviceSize,
     VkBufferUsageFlags,
     VmaMemoryUsage,
     VkMemoryPropertyFlags,
-    VkBuffer *, 
+    VkBuffer *,
     VmaAllocation *);
 i32 vulkan_copy_buffer(VkBuffer, VkBuffer, size_t);
 
 i32 vulkan_render_frame_pre(void);
 i32 vulkan_record_command_buffers(struct renderable *, size_t, vec3s);
 i32 vulkan_render_frame(void);
+
+i32 vulkan_texture_load(const char *);
+
+i32 vulkan_level_begin(void);
+i32 vulkan_level_end(void);
 
 #endif

@@ -2,12 +2,6 @@
 #include "renderer.h"
 #include "tagap.h"
 
-// TAGAP data directory.  May make this adjustable
-//#define TAGAP_DATA_DIR "/home/mike/games/TAGAP/data"
-#define TAGAP_DATA_DIR "./data"
-#define TAGAP_DATA_MOD_DIR "./data_add"
-#define TAGAP_SCRIPT_DIR TAGAP_DATA_DIR "/script"
-
 struct tagap g_state;
 
 static i32 foreach_in_dir(const char *, i32(*)(const char *));
@@ -32,7 +26,8 @@ main (i32 argc, char **argv)
 
     state_level_init();
 
-    strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-Bb.map");
+    //strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-Bb.map");
+    strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-A.map");
 
     // Set up SDL window
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -42,7 +37,7 @@ main (i32 argc, char **argv)
     }
     SDL_Window *win_handle = SDL_CreateWindow(
         "TAGAP Clone",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         WIDTH, HEIGHT,
         SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
     if (!win_handle)
@@ -83,13 +78,13 @@ main (i32 argc, char **argv)
                 case SDLK_l:
                     cam_add.x -= CAM_MOVE_SPEED;
                     break;
-                default: 
+                default:
                     break;
                 }
             } break;
-            case SDL_QUIT: 
+            case SDL_QUIT:
                 goto game_quit;
-            default: 
+            default:
                 break;
             }
         }
@@ -117,6 +112,7 @@ main (i32 argc, char **argv)
         case GAME_STATE_LEVEL_LOAD:
             // Reset current level state
             state_level_reset();
+            vulkan_level_begin();
 
             // Load the level that is in the current level state
             if (level_load(g_state.l.map_path) < 0)
@@ -132,6 +128,7 @@ main (i32 argc, char **argv)
             // Generate line geometry in a single vertex buffer
             // TODO
 
+            vulkan_level_end();
             tagap_set_state(GAME_STATE_LEVEL);
             break;
         case GAME_STATE_LEVEL:
@@ -160,7 +157,7 @@ game_quit:
     return 0;
 }
 
-static i32 
+static i32
 foreach_in_dir(const char *path, i32(*func)(const char *))
 {
     struct dirent *dp;

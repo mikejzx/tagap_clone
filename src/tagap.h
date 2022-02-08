@@ -1,9 +1,16 @@
 #ifndef TAGAP_H
 #define TAGAP_H
 
-#include "vulkan_renderer.h"
-#include "state_menu.h"
 #include "state_level.h"
+#include "state_menu.h"
+#include "vulkan_renderer.h"
+
+// TAGAP data directory.  May make this adjustable
+//#define TAGAP_DATA_DIR "/home/mike/games/TAGAP/data"
+#define TAGAP_DATA_DIR "./data"
+#define TAGAP_DATA_MOD_DIR "./data_add"
+#define TAGAP_SCRIPT_DIR TAGAP_DATA_DIR "/script"
+#define TAGAP_TEXTURES_DIR "./data/art/textures"
 
 enum game_state
 {
@@ -39,7 +46,7 @@ struct tagap
 
 extern struct tagap g_state;
 
-static inline void 
+static inline void
 tagap_set_state(enum game_state state)
 {
     g_state.type = state;

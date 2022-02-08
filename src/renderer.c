@@ -1,7 +1,8 @@
 #include "pch.h"
-#include "vulkan_renderer.h"
 #include "renderer.h"
+#include "tagap.h"
 #include "tagap_polygon.h"
+#include "vulkan_renderer.h"
 
 struct renderer g_renderer;
 
@@ -20,7 +21,7 @@ renderer_init(SDL_Window *winhandle)
     return 0;
 }
 
-void 
+void
 renderer_deinit(void)
 {
     LOG_INFO("[renderer] deinitialising");
@@ -36,13 +37,13 @@ renderer_deinit(void)
     free(g_renderer.objs);
 }
 
-void 
+void
 renderer_render(vec3s cam_pos)
 {
     // Record command buffers and render
     vulkan_render_frame_pre();
     vulkan_record_command_buffers(
-        g_renderer.objs, 
+        g_renderer.objs,
         g_renderer.obj_count,
         cam_pos);
     vulkan_render_frame();
@@ -62,13 +63,30 @@ get_renderable(void)
 /*
  * Add polygon to the renderer
  */
-void 
+void
 renderer_add_polygon(struct tagap_polygon *p)
 {
+    // First load texture
+    char texpath[256];
+    sprintf(texpath, "%s/%s.tga", TAGAP_TEXTURES_DIR, p->tex_name);
+    i32 tex_index = vulkan_texture_load(texpath);
+    if (tex_index < 0)
+    {
+        LOG_ERROR("[renderer] can't add polygon; couldn't load texture '%s'",
+            texpath);
+        return;
+    }
+
+    // Get renderable
     struct renderable *r = get_renderable();
     memset(r, 0, sizeof(struct renderable));
 
-    u32 tex_width = 128, tex_height = 128;
+    r->tex = tex_index;
+    vec2s tex_size =
+    {
+        (f32)g_vulkan->textures[tex_index].w,
+        (f32)g_vulkan->textures[tex_index].h,
+    };
 
     size_t vertices_size = sizeof(struct vertex) * p->point_count;
     struct vertex *vertices = malloc(vertices_size);
@@ -78,11 +96,11 @@ renderer_add_polygon(struct tagap_polygon *p)
         {
             .pos = p->points[i],
             .texcoord = (vec2s)
-            {{ 
-                 (p->points[i].x - p->points[p->tex_offset_point].x) 
-                     / (f32)tex_width,
-                 (p->points[i].y - p->points[p->tex_offset_point].y) 
-                     / (f32)tex_height,
+            {{
+                 -(p->points[p->tex_offset_point].x - p->points[i].x)
+                     / tex_size.x,
+                 (p->points[p->tex_offset_point].y - p->points[i].y)
+                     / tex_size.y,
             }},
         };
     }
@@ -91,7 +109,7 @@ renderer_add_polygon(struct tagap_polygon *p)
 
     // Calculate indices
     i32 tri_count = p->point_count - 2;
-    size_t index_buf_size = sizeof(u16) * tri_count * 3; 
+    size_t index_buf_size = sizeof(u16) * tri_count * 3;
     u16 *indices = alloca(index_buf_size);
     for (i32 i = 0; i < tri_count; ++i)
     {
