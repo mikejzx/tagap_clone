@@ -2,7 +2,7 @@
 #include "vulkan_renderer.h"
 #include "index_buffer.h"
 
-i32 
+i32
 ib_new(struct ibuffer *ib, const void *indices, size_t size)
 {
     memset(ib, 0, sizeof(struct ibuffer));
@@ -14,14 +14,14 @@ ib_new(struct ibuffer *ib, const void *indices, size_t size)
     VkBuffer staging_buf;
     VmaAllocation staging_buf_alloc;
     if (vulkan_create_buffer(
-        (VkDeviceSize)size, 
+        (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_CPU_ONLY,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &staging_buf, &staging_buf_alloc) < 0)
     {
-        LOG_ERROR("[vulkan] failed to create staging buffer");
+        LOG_ERROR("[ibuffer] failed to create staging buffer");
         return -1;
     }
 
@@ -40,20 +40,20 @@ ib_new(struct ibuffer *ib, const void *indices, size_t size)
      */
     //LOG_DBUG("[vulkan] creating index buffer");
     if (vulkan_create_buffer(
-        (VkDeviceSize)size, 
+        (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &ib->vk_buffer, &ib->vma_alloc) < 0)
     {
-        LOG_ERROR("[vulkan] failed to create index buffer");
+        LOG_ERROR("[ibuffer] failed to create index buffer");
         goto fail;
     }
 
     // Copy staging buffer to index buffer
     if (vulkan_copy_buffer(staging_buf, ib->vk_buffer, size) < 0)
     {
-        LOG_ERROR("[vulkan] failed to copy staging buffer to index buffer");
+        LOG_ERROR("[ibuffer] failed to copy staging buffer to index buffer");
         goto fail;
     }
 
@@ -69,7 +69,7 @@ fail:
     return -1;
 }
 
-void 
+void
 ib_free(struct ibuffer *ib)
 {
     vmaDestroyBuffer(g_vulkan->vma, ib->vk_buffer, ib->vma_alloc);

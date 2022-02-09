@@ -56,36 +56,51 @@ main (i32 argc, char **argv)
     for (;;)
     {
         // Poll inputs
-        static const f32 CAM_MOVE_SPEED = 50.0f;
-        vec3s cam_add = GLMS_VEC3_ZERO_INIT;
+        static bool buttons[4] = { 0, 0, 0, 0 };
         while (SDL_PollEvent(&event))
         {
             switch(event.type)
             {
+            // Temporary camera scrolling controls
             case SDL_KEYDOWN:
             {
                 switch(event.key.keysym.sym)
                 {
-                case SDLK_h:
-                    cam_add.x += CAM_MOVE_SPEED;
-                    break;
-                case SDLK_j:
-                    cam_add.y -= CAM_MOVE_SPEED;
-                    break;
-                case SDLK_k:
-                    cam_add.y += CAM_MOVE_SPEED;
-                    break;
-                case SDLK_l:
-                    cam_add.x -= CAM_MOVE_SPEED;
-                    break;
-                default:
-                    break;
+                case SDLK_h: buttons[0] = 1; break;
+                case SDLK_j: buttons[1] = 1; break;
+                case SDLK_k: buttons[2] = 1; break;
+                case SDLK_l: buttons[3] = 1; break;
+                default: break;
+                }
+            } break;
+            case SDL_KEYUP:
+            {
+                switch(event.key.keysym.sym)
+                {
+                case SDLK_h: buttons[0] = 0; break;
+                case SDLK_j: buttons[1] = 0; break;
+                case SDLK_k: buttons[2] = 0; break;
+                case SDLK_l: buttons[3] = 0; break;
+                default: break;
                 }
             } break;
             case SDL_QUIT:
                 goto game_quit;
             default:
                 break;
+            }
+        }
+        static const f32 CAM_MOVE_SPEED = 10.0f;
+        vec3s cam_add = GLMS_VEC3_ZERO_INIT;
+        for (u32 i = 0; i < 4; ++i)
+        {
+            f32 v = (f32)buttons[i];
+            switch (i)
+            {
+            case 0: cam_add.x += v * CAM_MOVE_SPEED; break;
+            case 1: cam_add.y -= v * CAM_MOVE_SPEED; break;
+            case 2: cam_add.y += v * CAM_MOVE_SPEED; break;
+            case 3: cam_add.x -= v * CAM_MOVE_SPEED; break;
             }
         }
         cam_pos = glms_vec3_add(cam_pos, cam_add);
@@ -124,9 +139,6 @@ main (i32 argc, char **argv)
 
             // Put something on the damn screen
             state_level_submit_to_renderer();
-
-            // Generate line geometry in a single vertex buffer
-            // TODO
 
             vulkan_level_end();
             tagap_set_state(GAME_STATE_LEVEL);

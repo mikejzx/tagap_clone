@@ -14,14 +14,14 @@ vb_new(struct vbuffer *vb, const void *vertices, size_t size)
     VkBuffer staging_buf;
     VmaAllocation staging_buf_alloc;
     if (vulkan_create_buffer(
-        (VkDeviceSize)size, 
+        (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_CPU_ONLY,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &staging_buf, &staging_buf_alloc) < 0)
     {
-        LOG_ERROR("[vulkan] failed to create staging buffer");
+        LOG_ERROR("[vbuffer] failed to create staging buffer");
         return -1;
     }
 
@@ -40,20 +40,20 @@ vb_new(struct vbuffer *vb, const void *vertices, size_t size)
      */
     //LOG_DBUG("[vulkan] creating vertex buffer");
     if (vulkan_create_buffer(
-        (VkDeviceSize)size, 
+        (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &vb->vk_buffer, &vb->vma_alloc) < 0)
     {
-        LOG_ERROR("[vulkan] failed to create vertex buffer");
+        LOG_ERROR("[vbuffer] failed to create vertex buffer");
         goto fail;
     }
 
     // Copy staging buffer to vertex buffer
     if (vulkan_copy_buffer(staging_buf, vb->vk_buffer, size) < 0)
     {
-        LOG_ERROR("[vulkan] failed to copy staging buffer to vertex buffer");
+        LOG_ERROR("[vbuffer] failed to copy staging buffer to vertex buffer");
         goto fail;
     }
 
@@ -69,7 +69,7 @@ fail:
     return -1;
 }
 
-void 
+void
 vb_free(struct vbuffer *vb)
 {
     vmaDestroyBuffer(g_vulkan->vma, vb->vk_buffer, vb->vma_alloc);

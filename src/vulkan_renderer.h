@@ -19,8 +19,8 @@
  *   the renderer
  */
 
-#define WIDTH 1280 //800
-#define HEIGHT 720 //600
+#define WIDTH 800
+#define HEIGHT 600
 
 #define MAX_TEXTURES 256
 

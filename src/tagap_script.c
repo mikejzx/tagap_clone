@@ -124,7 +124,8 @@ tagap_script_run(const char *fpath)
     FILE *fp = fopen(fpath, "r");
     if (!fp)
     {
-        LOG_ERROR("[tagap_script] failed to read script '%s' (%d)", fpath, errno);
+        LOG_ERROR("[tagap_script] failed to read script '%s' (%d)",
+            fpath, errno);
         return -1;
     }
 
@@ -159,15 +160,15 @@ tagap_script_run(const char *fpath)
         static const char *DELIM = " ";
     #define TOK_NEXT strtok(NULL, DELIM)
     #define TOK_IS(t) (strcmp(token, (t)) == 0)
-        for (char *token = strtok(line_tmp, DELIM); 
-            token != NULL; 
+        for (char *token = strtok(line_tmp, DELIM);
+            token != NULL;
             token = TOK_NEXT)
         {
             if (!atom)
             {
                 // First token is the atom ID
-                for (enum atom_id a = 0; 
-                    a < ATOM_COUNT; 
+                for (enum atom_id a = 0;
+                    a < ATOM_COUNT;
                     ++a)
                 {
                     // Lookup atom ID from string
@@ -198,7 +199,7 @@ tagap_script_run(const char *fpath)
                     } break;
 
                     // Normal parsing mode
-                    case TAGAP_PARSE_NORMAL: 
+                    case TAGAP_PARSE_NORMAL:
                     default: break;
                     }
 
@@ -220,7 +221,7 @@ tagap_script_run(const char *fpath)
                     {
                         LOG_ERROR(
                             "[tagap_script] map: title is too long: '%s'.  "
-                            "Length must not exceed %d chars", 
+                            "Length must not exceed %d chars",
                             token, LEVEL_TITLE_MAX);
                         strcpy(lvl->title, "(null)");
                         break;
@@ -243,16 +244,24 @@ tagap_script_run(const char *fpath)
             // Line definitions
             case ATOM_LINEDEF:
             {
+                if (lvl->linedef_count + 1 >= LEVEL_MAX_LINEDEFS)
+                {
+                    LOG_ERROR("[tagap_script] linedef limit (%d) exceeded",
+                        LEVEL_MAX_LINEDEFS);
+                    goto next_line;
+                }
+
                 struct tagap_linedef linedef;
                 if (sscanf(line, "LINEDEF %f %f %f %f %d",
-                    &linedef.start.x, &linedef.start.y, 
-                    &linedef.end.x, &linedef.end.y, 
+                    &linedef.start.x, &linedef.start.y,
+                    &linedef.end.x, &linedef.end.y,
                     (i32 *)&linedef.style) != 5)
                 {
                     LOG_ERROR("[tagap_script] invalid linedef (%s:%d)",
                         fpath, line_num);
                     goto next_line;
                 }
+                lvl->linedefs[lvl->linedef_count++] = linedef;
 
             #if 0
                 LOG_DBUG("[tagap_script] new linedef: "
@@ -270,14 +279,14 @@ tagap_script_run(const char *fpath)
                 cur_parse_mode = TAGAP_PARSE_POLYGON;
 
                 // Copy texture name
-                struct tagap_polygon *cur_poly = 
+                struct tagap_polygon *cur_poly =
                     &lvl->polygons[lvl->polygon_count++];
                 strcpy(cur_poly->tex_name, token);
                 token = TOK_NEXT;
                 if (!token)
                 {
                     LOG_ERROR("[tagap_script] POLYGON: missing arguments "
-                        "on %s:%d", 
+                        "on %s:%d",
                         fpath, line_num);
                     goto next_line;
                 }
@@ -286,7 +295,7 @@ tagap_script_run(const char *fpath)
                 if (!token)
                 {
                     LOG_ERROR("[tagap_script] POLYGON: missing arguments "
-                        "on %s:%d", 
+                        "on %s:%d",
                         fpath, line_num);
                     goto next_line;
                 }
@@ -299,12 +308,12 @@ tagap_script_run(const char *fpath)
                 // Don't exceed maximum polygons
                 if (lvl->polygon_count + 1 >= LEVEL_MAX_POLYGONS)
                 {
-                    LOG_ERROR("[tagap_script] polygon limit exceeded (%d)",
+                    LOG_ERROR("[tagap_script] polygon limit (%d) exceeded",
                         LEVEL_MAX_POLYGONS);
                     return -1;
                 }
 
-                struct tagap_polygon *cur_poly = 
+                struct tagap_polygon *cur_poly =
                     &lvl->polygons[lvl->polygon_count - 1];
                 vec2s *point = &cur_poly->points[cur_poly->point_count++];
                 if (sscanf(line, "POLYPOINT %f %f",
@@ -321,7 +330,7 @@ tagap_script_run(const char *fpath)
             polygon_end:
             {
                 cur_parse_mode = TAGAP_PARSE_NORMAL;
-                struct tagap_polygon *cur_poly = 
+                struct tagap_polygon *cur_poly =
                     &lvl->polygons[lvl->polygon_count - 1];
 
                 if (cur_poly->point_count < 3)
@@ -336,7 +345,7 @@ tagap_script_run(const char *fpath)
                 LOG_DBUG("END POLYGON: %d points", cur_poly->point_count);
                 for (i32 i = 0; i < cur_poly->point_count; ++i)
                 {
-                    LOG_DBUG("  PT: [%.2f %.2f]", 
+                    LOG_DBUG("  PT: [%.2f %.2f]",
                         cur_poly->points[i].x, cur_poly->points[i].y);
                 }
             #endif
@@ -350,7 +359,7 @@ tagap_script_run(const char *fpath)
                 // Make sure we don't exceed entity list
                 if (g_state.l.entity_list_count + 1 >= GAME_ENTITY_LIMIT)
                 {
-                    LOG_ERROR("[tagap_script] entity limit exceeded (%d)",
+                    LOG_ERROR("[tagap_script] entity limit (%d) exceeded",
                         GAME_ENTITY_LIMIT);
                     return -1;
                 }
@@ -383,11 +392,11 @@ tagap_script_run(const char *fpath)
             // Add entity into level
             case ATOM_ENTITY_SET:
             {
-                // Add the 
+                // Add the
             } goto next_line;
 
             // Skip unimplemented atoms
-            default: 
+            default:
                 break;
             }
         }

@@ -1030,7 +1030,7 @@ vulkan_record_command_buffers(
     }
 
     // Configure render pass
-    static const VkClearValue clear_colour = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}};
+    static const VkClearValue clear_colour = {{{ 0.05f, 0.05f, 0.05f, 1.0f }}};
     VkRenderPassBeginInfo render_pass_info =
     {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1080,8 +1080,8 @@ vulkan_record_command_buffers(
         m_v = glms_translate(m_v,
             (vec3s){ cam_pos.x, cam_pos.y, 0.0f });
         mat4s m_p = glms_ortho(
-            0.0f, (f32)swapchain->extent.width,
-            0.0f, (f32)swapchain->extent.height,
+            0.0f, 800,
+            0.0f, 600,
             -1.0f, 1.0f);
         const struct push_constants pconsts =
         {

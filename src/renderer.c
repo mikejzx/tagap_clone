@@ -72,7 +72,7 @@ renderer_add_polygon(struct tagap_polygon *p)
     i32 tex_index = vulkan_texture_load(texpath);
     if (tex_index < 0)
     {
-        LOG_ERROR("[renderer] can't add polygon; couldn't load texture '%s'",
+        LOG_WARN("[renderer] can't add polygon; couldn't load texture '%s'",
             texpath);
         return;
     }
@@ -118,4 +118,159 @@ renderer_add_polygon(struct tagap_polygon *p)
         indices[i * 3 + 2] = i + 2;
     }
     ib_new(&r->ib, indices, index_buf_size);
+}
+
+/*
+ * Add list of level linedefs to the renderer
+ */
+void
+renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
+{
+    struct displayed_linedef
+    {
+        enum tagap_linedef_style style;
+        char tex[32];
+        struct vertex *v;
+        u16 *i;
+        size_t v_size, i_size;
+    } linfo[] =
+    {
+        // List of linedefs styles that we actually draw
+        { LINEDEF_STYLE_FLOOR, "(world-floor)", 0, 0, 0, 0 },
+        { LINEDEF_STYLE_PLATE_FLOOR, "(world-plate)", 0, 0, 0, 0 },
+        // Don't draw ceilings
+    };
+    static const u32 displayed_linedef_count =
+        sizeof(linfo) / sizeof(struct displayed_linedef);
+
+    for (u32 d = 0; d < displayed_linedef_count; ++d)
+    {
+        struct displayed_linedef *info = &linfo[d];
+
+        // Count number of linedefs of this style
+        u32 i;
+        for (i = 0; i < lc; ++i)
+        {
+            if (ldefs[i].style != info->style) continue;
+            info->v_size += 4 * sizeof(struct vertex);
+            info->i_size += 6 * sizeof(u16);
+        }
+        if (!info->v_size || !info->i_size)
+        {
+            LOG_WARN("[renderer] skipping linedef style %d as "
+                "it has no lines", info->style);
+            continue;
+        }
+
+        // Load texture
+        char tex_path[256];
+        sprintf(tex_path, "%s/%s.tga", TAGAP_TEXTURES_DIR, info->tex);
+        i32 tex_index = vulkan_texture_load(tex_path);
+        if (tex_index < 0)
+        {
+            LOG_WARN("[renderer] skipping linedef style %d as "
+                "texture '%s' failed to load", info->style, info->tex);
+            continue;
+        }
+        f32 tex_w = (f32)g_vulkan->textures[tex_index].w;
+        f32 tex_h = (f32)g_vulkan->textures[tex_index].h;
+
+        // Allocate buffers
+        info->v = malloc(info->v_size);
+        info->i = malloc(info->i_size);
+
+        // Fill buffers
+        u32 cur_l = 0;
+        for (i = 0; i < lc; ++i)
+        {
+            struct tagap_linedef *l = &ldefs[i];
+            if (l->style != info->style) continue;
+
+            // Length of the line
+            f32 llen = glms_vec2_distance(l->start, l->end);
+
+            // Top left
+            info->v[cur_l * 4 + 0] = (struct vertex)
+            {
+                .pos = (vec2s)
+                {
+                    l->start.x,
+                    l->start.y,
+                },
+                .texcoord = (vec2s)
+                {
+                    0.0f,
+                    0.0f,
+                },
+            };
+            // Top right
+            info->v[cur_l * 4 + 1] = (struct vertex)
+            {
+                .pos = (vec2s)
+                {
+                    l->end.x,
+                    l->end.y,
+                },
+                .texcoord = (vec2s)
+                {
+                    llen / tex_w,
+                    0.0f,
+                },
+            };
+            // Bottom right
+            info->v[cur_l * 4 + 2] = (struct vertex)
+            {
+                .pos = (vec2s)
+                {
+                    l->end.x,
+                    l->end.y - tex_h,
+                },
+                .texcoord = (vec2s)
+                {
+                    llen / tex_w,
+                    1.0f,
+                },
+            };
+            // Bottom left
+            info->v[cur_l * 4 + 3] = (struct vertex)
+            {
+                .pos = (vec2s)
+                {
+                    l->start.x,
+                    l->start.y - tex_h,
+                },
+                .texcoord = (vec2s)
+                {
+                    0.0f,
+                    1.0f,
+                },
+            };
+
+            // Indices are pretty straightforward
+            info->i[cur_l * 6 + 0] = cur_l * 4;
+            info->i[cur_l * 6 + 1] = cur_l * 4 + 1;
+            info->i[cur_l * 6 + 2] = cur_l * 4 + 2;
+            info->i[cur_l * 6 + 3] = cur_l * 4;
+            info->i[cur_l * 6 + 4] = cur_l * 4 + 2;
+            info->i[cur_l * 6 + 5] = cur_l * 4 + 3;
+
+            ++cur_l;
+        }
+
+        // Create renderables
+        struct renderable *r = get_renderable();
+        if (r)
+        {
+            LOG_DBUG("[renderer] adding linedef vertex buffer "
+                "(style %d) with %d lines", info->style, cur_l);
+            memset(r, 0, sizeof(struct renderable));
+            r->tex = tex_index;
+            vb_new(&r->vb, info->v, info->v_size);
+            ib_new(&r->ib, info->i, info->i_size);
+        }
+
+        // Cleanup
+        free(info->v);
+        free(info->i);
+    }
 }

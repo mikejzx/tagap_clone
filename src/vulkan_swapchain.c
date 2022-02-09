@@ -16,17 +16,17 @@ struct swapchain_support_info
     u32 present_mode_count;
 };
 
-static struct swapchain_support_info 
+static struct swapchain_support_info
     query_swapchain_support(VkPhysicalDevice card);
 
 /*
  * Create the swapchain
  */
-i32 
+i32
 vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
 {
     // Check swapchain support
-    struct swapchain_support_info details = 
+    struct swapchain_support_info details =
         query_swapchain_support(g_vulkan->video_card);
 
     /*
@@ -49,7 +49,7 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
      * (Fallback to FIFO mode (Vsync) which is apparently guaranteed)
      */
     VkPresentModeKHR pmode = VK_PRESENT_MODE_FIFO_KHR;
-#if 1
+#if 0
     for (i32 i = 0; i < details.present_mode_count; ++i)
     {
         // Prefer mailbox (triple-buffering) mode
@@ -75,11 +75,11 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     {
         extent = (VkExtent2D)
         {
-            .width = 
-                max(details.capabilities.minImageExtent.width, 
+            .width =
+                max(details.capabilities.minImageExtent.width,
                     min(details.capabilities.maxImageExtent.width, WIDTH)),
-            .height = 
-                max(details.capabilities.minImageExtent.height, 
+            .height =
+                max(details.capabilities.minImageExtent.height,
                     min(details.capabilities.maxImageExtent.height, HEIGHT)),
         };
     }
@@ -89,8 +89,8 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     printf("[INFO] [vulkan] supported present modes:\n");
     for (i32 i = 0; i < details.present_mode_count; ++i)
     {
-        printf("%s", details.present_modes[i] == pmode 
-            ? "  [*]" 
+        printf("%s", details.present_modes[i] == pmode
+            ? "  [*]"
             : "  [ ]");
         switch (details.present_modes[i])
         {
@@ -149,12 +149,12 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     free(details.formats);
     free(details.present_modes);
 
-    u32 queue_family_indices[2] = 
-    { 
-        g_vulkan->qfams[VKQ_GRAPHICS].index, 
-        g_vulkan->qfams[VKQ_PRESENT].index, 
+    u32 queue_family_indices[2] =
+    {
+        g_vulkan->qfams[VKQ_GRAPHICS].index,
+        g_vulkan->qfams[VKQ_PRESENT].index,
     };
-    if (g_vulkan->qfams[VKQ_GRAPHICS].index != 
+    if (g_vulkan->qfams[VKQ_GRAPHICS].index !=
         g_vulkan->qfams[VKQ_PRESENT].index)
     {
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -171,7 +171,7 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     }
 
     // Create the swapchain
-    if (vkCreateSwapchainKHR(g_vulkan->d, 
+    if (vkCreateSwapchainKHR(g_vulkan->d,
         &create_info, NULL, &swapchain->handle) != VK_SUCCESS)
     {
         LOG_ERROR("[vulkan] failed to create swapchain");
@@ -192,24 +192,24 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     /*
      * Create image views
      */
-    swapchain->imageviews = 
+    swapchain->imageviews =
         malloc(swapchain->image_count * sizeof(VkImageView));
     for (i32 i = 0; i < swapchain->image_count; ++i)
     {
-        VkImageViewCreateInfo create_info = 
+        VkImageViewCreateInfo create_info =
         {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = swapchain->images[i],
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = swapchain->format,
-            .components = 
+            .components =
             {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .b = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .a = VK_COMPONENT_SWIZZLE_IDENTITY,
             },
-            .subresourceRange = 
+            .subresourceRange =
             {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                 .baseMipLevel = 0,
@@ -218,9 +218,9 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
                 .layerCount = 1,
             },
         };
-        if (vkCreateImageView(g_vulkan->d, 
-            &create_info, 
-            NULL, 
+        if (vkCreateImageView(g_vulkan->d,
+            &create_info,
+            NULL,
             &swapchain->imageviews[i]) != VK_SUCCESS)
         {
             LOG_ERROR("[vulkan] failed to create image view");
@@ -238,7 +238,7 @@ vulkan_swapchain_deinit(struct vulkan_swapchain *swapchain)
     {
         for (i32 i = 0; i < swapchain->image_count; ++i)
         {
-            vkDestroyImageView(g_vulkan->d, 
+            vkDestroyImageView(g_vulkan->d,
                 swapchain->imageviews[i], NULL);
         }
         free(swapchain->imageviews);
@@ -260,10 +260,10 @@ vulkan_swapchain_deinit_framebuffers(struct vulkan_swapchain *swapchain)
     }
 }
 
-i32 
+i32
 vulkan_swapchain_create_framebuffers(struct vulkan_swapchain *swapchain)
 {
-    swapchain->framebuffers = 
+    swapchain->framebuffers =
         malloc(swapchain->image_count * sizeof(VkFramebuffer));
 
     for (i32 i = 0; i < swapchain->image_count; ++i)
@@ -292,13 +292,13 @@ vulkan_swapchain_create_framebuffers(struct vulkan_swapchain *swapchain)
     return 0;
 }
 
-static struct swapchain_support_info 
+static struct swapchain_support_info
 query_swapchain_support(VkPhysicalDevice card)
 {
     struct swapchain_support_info details;
 
     // Get surface capabilities
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(card, 
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(card,
         g_vulkan->surface, &details.capabilities);
 
     // Get supported formats
@@ -310,8 +310,8 @@ query_swapchain_support(VkPhysicalDevice card)
         details.formats = malloc(format_count * sizeof(VkSurfaceFormatKHR));
         details.format_count = format_count;
         vkGetPhysicalDeviceSurfaceFormatsKHR(card,
-            g_vulkan->surface, 
-            &format_count, 
+            g_vulkan->surface,
+            &format_count,
             details.formats);
     }
     else
@@ -330,8 +330,8 @@ query_swapchain_support(VkPhysicalDevice card)
         details.present_modes = malloc(pmode_count * sizeof(VkPresentModeKHR));
         details.present_mode_count = pmode_count;
         vkGetPhysicalDeviceSurfacePresentModesKHR(card,
-            g_vulkan->surface, 
-            &pmode_count, 
+            g_vulkan->surface,
+            &pmode_count,
             details.present_modes);
     }
     else
@@ -344,7 +344,7 @@ query_swapchain_support(VkPhysicalDevice card)
     return details;
 }
 
-bool 
+bool
 vulkan_swapchain_check_support(VkPhysicalDevice card)
 {
     struct swapchain_support_info details = query_swapchain_support(card);

@@ -8,7 +8,7 @@
 
 struct level *g_map;
 
-void 
+void
 state_level_init(void)
 {
     LOG_INFO("[state] level init");
@@ -23,7 +23,8 @@ state_level_init(void)
     g_map->entities = malloc(LEVEL_MAX_ENTITIES * sizeof(struct tagap_entity));
     g_map->entity_count = 0;
 
-    g_state.l.entity_list = malloc(GAME_ENTITY_LIMIT * sizeof(struct tagap_entity));
+    g_state.l.entity_list =
+        malloc(GAME_ENTITY_LIMIT * sizeof(struct tagap_entity));
     g_state.l.entity_list_count = 0;
 }
 
@@ -37,11 +38,11 @@ state_level_reset(void)
     g_map->entity_count = 0;
 
     // Need to set this to zero to reset polygon point counters
-    memset(g_map->polygons, 0, 
+    memset(g_map->polygons, 0,
         LEVEL_MAX_POLYGONS * sizeof(struct tagap_polygon));
 }
 
-void 
+void
 state_level_deinit(void)
 {
     LOG_INFO("[state] level cleanup");
@@ -54,7 +55,7 @@ state_level_deinit(void)
 /*
  * Add polygons, linedefs, etc. to the renderer
  */
-void 
+void
 state_level_submit_to_renderer(void)
 {
     // Polygons are rendered first so add them to the renderables list first
@@ -63,4 +64,7 @@ state_level_submit_to_renderer(void)
     {
         renderer_add_polygon(&g_map->polygons[i]);
     }
+
+    // Finally generate line geometry.
+    renderer_add_linedefs(g_map->linedefs, g_map->linedef_count);
 }

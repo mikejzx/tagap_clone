@@ -4,6 +4,7 @@
 #include "types.h"
 #include "index_buffer.h"
 #include "tagap_polygon.h"
+#include "tagap_linedef.h"
 #include "vertex_buffer.h"
 
 /*
@@ -36,5 +37,6 @@ int renderer_init(SDL_Window *);
 void renderer_render(vec3s);
 void renderer_deinit(void);
 void renderer_add_polygon(struct tagap_polygon *);
+void renderer_add_linedefs(struct tagap_linedef *, size_t);
 
 #endif
