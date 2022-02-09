@@ -7,7 +7,7 @@ layout(location = 1) flat in int v_TexIndex;
 layout(location = 0) out vec4 o_FragColour;
 
 layout(binding = 0) uniform sampler u_Sampler;
-layout(binding = 1) uniform texture2D u_Textures[256];
+layout(binding = 1) uniform texture2D u_Textures[128];
 
 void main()
 {

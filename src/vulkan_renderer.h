@@ -22,7 +22,7 @@
 #define WIDTH 800
 #define HEIGHT 600
 
-#define MAX_TEXTURES 256
+#define MAX_TEXTURES 128
 
 enum vulkan_queue_id
 {

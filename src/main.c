@@ -50,8 +50,6 @@ main (i32 argc, char **argv)
     // Initialise renderer
     if (renderer_init(win_handle) < 0) goto game_quit;
 
-    static vec3s cam_pos = (vec3s)GLMS_VEC3_ZERO_INIT;
-
     SDL_Event event;
     for (;;)
     {
@@ -97,13 +95,16 @@ main (i32 argc, char **argv)
             f32 v = (f32)buttons[i];
             switch (i)
             {
-            case 0: cam_add.x += v * CAM_MOVE_SPEED; break;
-            case 1: cam_add.y -= v * CAM_MOVE_SPEED; break;
-            case 2: cam_add.y += v * CAM_MOVE_SPEED; break;
-            case 3: cam_add.x -= v * CAM_MOVE_SPEED; break;
+            case 0: cam_add.x -= v * CAM_MOVE_SPEED; break;
+            case 1: cam_add.y += v * CAM_MOVE_SPEED; break;
+            case 2: cam_add.y -= v * CAM_MOVE_SPEED; break;
+            case 3: cam_add.x += v * CAM_MOVE_SPEED; break;
             }
         }
-        cam_pos = glms_vec3_add(cam_pos, cam_add);
+        g_state.cam_pos = glms_vec3_add(g_state.cam_pos, cam_add);
+
+        // Get inputs
+        SDL_GetMouseState(&g_state.mouse_x, &g_state.mouse_y);
 
         // Main state machine loop
         switch (g_state.type)
@@ -113,7 +114,7 @@ main (i32 argc, char **argv)
             LOG_INFO("Running boot state ...");
 
             // Load the main game scripts
-            //foreach_in_dir(TAGAP_SCRIPT_DIR "/game", tagap_script_run);
+            foreach_in_dir(TAGAP_SCRIPT_DIR "/game", tagap_script_run);
 
             // Boot to menu state
             // TODO...
@@ -140,22 +141,19 @@ main (i32 argc, char **argv)
             // Put something on the damn screen
             state_level_submit_to_renderer();
 
+            state_level_spawn_entities();
+
             vulkan_level_end();
             tagap_set_state(GAME_STATE_LEVEL);
             break;
         case GAME_STATE_LEVEL:
-            // TODO: actual game level loop
-
-            // Update entities
-            // TODO
-
-            // Render level
-            // TODO
+            // Update the level entities
+            state_level_update_entities();
             break;
         }
 
         // Render this frame
-        renderer_render(cam_pos);
+        renderer_render(g_state.cam_pos);
     }
 game_quit:
 

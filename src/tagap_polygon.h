@@ -1,6 +1,7 @@
 #ifndef TAGAP_POLYGON_H
 #define TAGAP_POLYGON_H
 
+#define POLYGON_TEX_NAME_MAX 64
 #define POLYGON_MAX_POINTS 16
 
 struct tagap_polygon

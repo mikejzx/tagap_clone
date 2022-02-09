@@ -1,9 +1,10 @@
 #include "pch.h"
 #include "tagap.h"
-#include "tagap_script.h"
-#include "tagap_linedef.h"
+#include "tagap_anim.h"
 #include "tagap_entity.h"
+#include "tagap_linedef.h"
 #include "tagap_polygon.h"
+#include "tagap_script.h"
 
 // Top-level token
 enum atom_id
@@ -58,6 +59,10 @@ enum atom_id
     // End of entity definition
     ATOM_ENTITY_END,
 
+    // Clones all info of existing entity
+    // STR: name of entity to clone
+    ATOM_CLONE,
+
     // Defines a sprite for an entity
     // + STR: loading parameter (STATIC/DYNAMIC)
     // + BOOL: full bright flag
@@ -110,6 +115,7 @@ static const char *ATOM_NAMES[] =
     [ATOM_ENTITY_SET]   = "ENTITY_SET",
     [ATOM_ENTITY_START] = "ENTITY_START",
     [ATOM_ENTITY_END]   = "ENTITY_END",
+    [ATOM_CLONE]        = "CLONE",
     [ATOM_SPRITE]       = "SPRITE",
     [ATOM_SPRITEVAR]    = "SPRITEVAR",
     [ATOM_THINK]        = "THINK",
@@ -121,6 +127,10 @@ static const char *ATOM_NAMES[] =
 i32
 tagap_script_run(const char *fpath)
 {
+#if DEBUG
+    assert(sizeof(ATOM_NAMES) / sizeof(const char *) == ATOM_COUNT);
+#endif
+
     FILE *fp = fopen(fpath, "r");
     if (!fp)
     {
@@ -143,15 +153,15 @@ tagap_script_run(const char *fpath)
 
     // Read the script file, line by line
     size_t len = 0, ltmp, line_num = 0;
+    char *line_tmp = malloc(256 * sizeof(char));
     for (char *line = NULL; (len = getline(&line, &ltmp, fp)) != -1; ++line_num)
     {
-        if (len < 1) continue;
+        if (len < 1 || line[0] == '/') continue;
 
         // Strip newline
-        line[len - 2] = '\0';
+        if (line[len - 1] == '\n') line[len - 2] = '\0';
 
         // Hacky fix to make sure strtok doesn't ruin the original line
-        char *line_tmp = alloca(len - 1);
         strcpy(line_tmp, line);
 
         enum atom_id atom = ATOM_UNKNOWN;
@@ -278,6 +288,16 @@ tagap_script_run(const char *fpath)
             {
                 cur_parse_mode = TAGAP_PARSE_POLYGON;
 
+                if (strlen(token) >= POLYGON_TEX_NAME_MAX)
+                {
+                    LOG_ERROR(
+                        "[tagap_script] POLYGON title is too long: '%s'.  "
+                        "Length must not exceed %d chars",
+                        token, POLYGON_TEX_NAME_MAX);
+                    cur_parse_mode = TAGAP_PARSE_NORMAL;
+                    goto next_line;
+                }
+
                 // Copy texture name
                 struct tagap_polygon *cur_poly =
                     &lvl->polygons[lvl->polygon_count++];
@@ -310,7 +330,7 @@ tagap_script_run(const char *fpath)
                 {
                     LOG_ERROR("[tagap_script] polygon limit (%d) exceeded",
                         LEVEL_MAX_POLYGONS);
-                    return -1;
+                    goto next_line;
                 }
 
                 struct tagap_polygon *cur_poly =
@@ -351,21 +371,21 @@ tagap_script_run(const char *fpath)
             #endif
             } goto next_line;
 
-            // Begin entity definition
+            // Begin entity info definition
             case ATOM_ENTITY_START:
             {
-                cur_parse_mode = TAGAP_PARSE_ENTITY;
-
                 // Make sure we don't exceed entity list
-                if (g_state.l.entity_list_count + 1 >= GAME_ENTITY_LIMIT)
+                if (g_state.l.entity_info_count + 1 >= GAME_ENTITY_INFO_LIMIT)
                 {
                     LOG_ERROR("[tagap_script] entity limit (%d) exceeded",
-                        GAME_ENTITY_LIMIT);
-                    return -1;
+                        GAME_ENTITY_INFO_LIMIT);
+                    goto next_line;
                 }
 
-                struct tagap_entity *cur_entity =
-                    &g_state.l.entity_list[g_state.l.entity_list_count++];
+                i32 index = g_state.l.entity_info_count;
+                struct tagap_entity_info *e =
+                    &g_state.l.entity_infos[index];
+                memset(e, 0, sizeof(struct tagap_entity_info));
 
                 if (strlen(token) >= ENTITY_NAME_MAX)
                 {
@@ -375,8 +395,11 @@ tagap_script_run(const char *fpath)
                     goto next_line;
                 }
 
+                cur_parse_mode = TAGAP_PARSE_ENTITY;
+                ++g_state.l.entity_info_count;
+
                 // Set the entity name
-                strcpy(cur_entity->name, token);
+                strcpy(e->name, token);
 
                 //LOG_DBUG("NEW ENTITY '%s'", cur_entity->name);
             } goto next_line;
@@ -392,7 +415,157 @@ tagap_script_run(const char *fpath)
             // Add entity into level
             case ATOM_ENTITY_SET:
             {
-                // Add the
+                // Don't exceed limit
+                if (lvl->entity_count + 1 >= LEVEL_MAX_ENTITIES)
+                {
+                    LOG_ERROR("[tagap_script] level entity limit (%d) exceeded",
+                        LEVEL_MAX_ENTITIES);
+                    goto next_line;
+                }
+
+                // Get entity info from given name
+                struct tagap_entity_info *ei = NULL;
+                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
+                {
+                    // Find the entity with specified name
+                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
+                        continue;
+
+                    ei = &g_state.l.entity_infos[i];
+                    break;
+                }
+                if (!ei)
+                {
+                    LOG_ERROR("[tagap_script] ENTITY_SET: "
+                        "no entity with name '%s'", token);
+                    goto next_line;
+                }
+                //LOG_DBUG("[tagap_script] adding entity (%s)", token);
+
+                struct tagap_entity e;
+                e.info = ei;
+
+                // X coordinate
+                token = TOK_NEXT;
+                e.position.x = (f32)atoi(token);
+
+                // Y coordinate
+                token = TOK_NEXT;
+                e.position.y = (f32)atoi(token);
+
+                // Entity angle or facing
+                token = TOK_NEXT;
+                e.aim_angle = (int)atoi(token);
+
+                lvl->entities[lvl->entity_count++] = e;
+            } goto next_line;
+
+            // Copy entity info
+            case ATOM_CLONE:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] CLONE: not on entity");
+                    goto next_line;
+                }
+
+                struct tagap_entity_info *to_copy = NULL;
+                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
+                {
+                    // Find the entity with specified name
+                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
+                        continue;
+
+                    to_copy = &g_state.l.entity_infos[i];
+                    break;
+                }
+                if (!to_copy)
+                {
+                    LOG_WARN("[tagap_script] CLONE: "
+                        "no entity with name '%s'", token);
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e =
+                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+                entity_info_clone(e, to_copy, true);
+            } goto next_line;
+
+            // Define sprite on entity
+            case ATOM_SPRITE:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] SPRITE: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e =
+                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+
+                // Check bounds
+                i32 sprite_index = e->sprite_info_count;
+                if (sprite_index + 1 >= ENTITY_MAX_SPRITES)
+                {
+                    goto next_line;
+                }
+
+                struct sprite_info info;
+
+                // Loading parameter (ignored)
+                token = TOK_NEXT;
+
+                // Bright flag
+                info.bright = !!atoi(token);
+                token = TOK_NEXT;
+
+                // Animation
+                info.anim = lookup_tagap_anim(token);
+                token = TOK_NEXT;
+
+                // Offset
+                info.offset.x = (f32)atoi(token);
+                token = TOK_NEXT;
+                info.offset.y = (f32)atoi(token);
+                token = TOK_NEXT;
+
+                // Name
+                if (strlen(token) > SPRITE_NAME_MAX)
+                {
+                    LOG_ERROR("[tagap_script] sprite name is too "
+                        "long (max %d) in (%s:%d)",
+                        SPRITE_NAME_MAX, fpath, line_num);
+                    goto next_line;
+                }
+                strcpy(info.name, token);
+
+                // Set the sprite info
+                e->sprite_infos[sprite_index] = info;
+                ++e->sprite_info_count;
+                //LOG_DBUG("%d", e->sprite_info_count);
+            } goto next_line;
+
+            // Defines entity AI routine
+            case ATOM_THINK:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] THINK: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e =
+                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+
+                // Get mode and speed modifier
+                e->think.mode = lookup_tagap_think(token);
+                token = TOK_NEXT;
+                e->think.speed_mod = (f32)atof(token);
+
+                // Skip other parameters as we don't care about them right now
             } goto next_line;
 
             // Skip unimplemented atoms
@@ -402,8 +575,9 @@ tagap_script_run(const char *fpath)
         }
 
     next_line:
-        ;
+        continue;
     }
+    free(line_tmp);
 
     fclose(fp);
 

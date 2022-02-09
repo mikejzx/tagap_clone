@@ -2,7 +2,7 @@
 #define PLAYER_H
 
 #include "types.h"
-#include "entity.h"
+#include "tagap_entity.h"
 
 /*
  * player.h
@@ -28,7 +28,7 @@ enum PLAYER_TYPE
 struct player
 {
     // Player entity
-    struct entity *e;
+    struct tagap_entity *e;
 };
 
 #endif

@@ -11,6 +11,7 @@
 #define TAGAP_DATA_MOD_DIR "./data_add"
 #define TAGAP_SCRIPT_DIR TAGAP_DATA_DIR "/script"
 #define TAGAP_TEXTURES_DIR "./data/art/textures"
+#define TAGAP_SPRITES_DIR "./data/art/sprites"
 
 enum game_state
 {
@@ -38,6 +39,13 @@ struct tagap
     {
         struct state_menu m;
         struct state_level l;
+    };
+
+    // Current client-side input/state info
+    struct
+    {
+        vec3s cam_pos;
+        i32 mouse_x, mouse_y;
     };
 
     // Renderer

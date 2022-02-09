@@ -23,14 +23,20 @@ state_level_init(void)
     g_map->entities = malloc(LEVEL_MAX_ENTITIES * sizeof(struct tagap_entity));
     g_map->entity_count = 0;
 
-    g_state.l.entity_list =
-        malloc(GAME_ENTITY_LIMIT * sizeof(struct tagap_entity));
-    g_state.l.entity_list_count = 0;
+    g_state.l.entity_infos =
+        malloc(GAME_ENTITY_INFO_LIMIT * sizeof(struct tagap_entity_info));
+    g_state.l.entity_info_count = 0;
 }
 
 void
 state_level_reset(void)
 {
+    // Cleanup entities
+    for (u32 i = 0; i < g_map->entity_count; ++i)
+    {
+        entity_free(&g_map->entities[i]);
+    }
+
     // Clear out all current data
     g_map->title[0] = g_map->desc[0] = '\0';
     g_map->linedef_count = 0;
@@ -49,7 +55,7 @@ state_level_deinit(void)
     free(g_map->linedefs);
     free(g_map->polygons);
     free(g_map->entities);
-    free(g_state.l.entity_list);
+    free(g_state.l.entity_infos);
 }
 
 /*
@@ -67,4 +73,28 @@ state_level_submit_to_renderer(void)
 
     // Finally generate line geometry.
     renderer_add_linedefs(g_map->linedefs, g_map->linedef_count);
+}
+
+/*
+ * Spawn all entities in the level
+ */
+void
+state_level_spawn_entities()
+{
+    for (u32 i = 0; i < g_map->entity_count; ++i)
+    {
+        entity_spawn(&g_map->entities[i]);
+    }
+}
+
+/*
+ * Update all entities in the level
+ */
+void
+state_level_update_entities()
+{
+    for (u32 i = 0; i < g_map->entity_count; ++i)
+    {
+        entity_update(&g_map->entities[i]);
+    }
 }

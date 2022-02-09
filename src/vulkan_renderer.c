@@ -1056,6 +1056,9 @@ vulkan_record_command_buffers(
     static const VkDeviceSize offset = 0;
     for (i32 o = 0; o < obj_count; ++o)
     {
+        // Skip hidden objects
+        if (objs[o].hidden) continue;
+
         // Bind vertex and index buffers
         vkCmdBindVertexBuffers(cbuf,
             0,
@@ -1071,14 +1074,14 @@ vulkan_record_command_buffers(
         mat4s m_m = (mat4s)GLMS_MAT4_IDENTITY_INIT;
         m_m = glms_translate(m_m,
             (vec3s){ objs[o].pos.x, objs[o].pos.y, 0.0f });
+        m_m.raw[1][1] *= -1.0f;
         if (objs[o].rot != 0.0f)
         {
             m_m = glms_rotate_z(m_m, glm_rad(objs[o].rot));
         }
-        m_m.raw[1][1] *= -1.0f;
         mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
         m_v = glms_translate(m_v,
-            (vec3s){ cam_pos.x, cam_pos.y, 0.0f });
+            (vec3s){ -cam_pos.x, -cam_pos.y, 0.0f });
         mat4s m_p = glms_ortho(
             0.0f, 800,
             0.0f, 600,
@@ -1354,8 +1357,8 @@ vulkan_setup_textures(void)
     const VkSamplerCreateInfo sampler_info =
     {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_NEAREST, //VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_NEAREST, //VK_FILTER_LINEAR,
+        .magFilter = VK_FILTER_LINEAR, //VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_LINEAR, //VK_FILTER_NEAREST,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -1713,7 +1716,8 @@ vulkan_texture_load(const char *path)
     VkDeviceSize size = w * h * 4;
     if (!pixels)
     {
-        LOG_ERROR("[stb_image] failed to load texture");
+        LOG_ERROR("[stb_image] failed to load texture '%s'",
+            path);
         return -1;
     }
 

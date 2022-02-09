@@ -17,8 +17,8 @@
 // Hard-coded constants for now
 #define LEVEL_MAX_LINEDEFS 512
 #define LEVEL_MAX_POLYGONS 512
-#define LEVEL_MAX_ENTITIES 512
-#define GAME_ENTITY_LIMIT 1024
+#define LEVEL_MAX_ENTITIES 1024
+#define GAME_ENTITY_INFO_LIMIT 1024
 
 struct state_level
 {
@@ -27,7 +27,7 @@ struct state_level
     char map_path[128];
 
     // Level data
-    struct level 
+    struct level
     {
         // Level name and description
         char title[LEVEL_TITLE_MAX];
@@ -48,8 +48,8 @@ struct state_level
 
     // Global entity definitions (do not need to be in the level).  These are
     // read when the game starts up.
-    struct tagap_entity *entity_list;
-    i32 entity_list_count;
+    struct tagap_entity_info *entity_infos;
+    i32 entity_info_count;
 
     // Player state
     struct player player;
@@ -62,6 +62,8 @@ void state_level_reset(void);
 void state_level_deinit(void);
 
 void state_level_submit_to_renderer(void);
+void state_level_spawn_entities(void);
+void state_level_update_entities(void);
 
 static inline i32
 level_load(const char *fpath)

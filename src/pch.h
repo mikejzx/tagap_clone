@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <unistd.h>
 
 // Libraries
 #include <SDL2/SDL.h>

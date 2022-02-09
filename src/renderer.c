@@ -6,8 +6,6 @@
 
 struct renderer g_renderer;
 
-static struct renderable *get_renderable(void);
-
 int
 renderer_init(SDL_Window *winhandle)
 {
@@ -49,15 +47,17 @@ renderer_render(vec3s cam_pos)
     vulkan_render_frame();
 }
 
-static struct renderable *
-get_renderable(void)
+struct renderable *
+renderer_get_renderable(void)
 {
     if (g_renderer.obj_count + 1 >= MAX_OBJECTS)
     {
         LOG_ERROR("[renderer] object capacity exceeded!");
         return NULL;
     }
-    return &g_renderer.objs[g_renderer.obj_count++];
+    struct renderable *r = &g_renderer.objs[g_renderer.obj_count++];
+    memset(r, 0, sizeof(struct renderable));
+    return r;
 }
 
 /*
@@ -78,8 +78,7 @@ renderer_add_polygon(struct tagap_polygon *p)
     }
 
     // Get renderable
-    struct renderable *r = get_renderable();
-    memset(r, 0, sizeof(struct renderable));
+    struct renderable *r = renderer_get_renderable();
 
     r->tex = tex_index;
     vec2s tex_size =
@@ -258,7 +257,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         }
 
         // Create renderables
-        struct renderable *r = get_renderable();
+        struct renderable *r = renderer_get_renderable();
         if (r)
         {
             LOG_DBUG("[renderer] adding linedef vertex buffer "
