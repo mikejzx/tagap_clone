@@ -24,7 +24,7 @@ else
 	CFLAGS=$(CFLAGS_DEBUG)
 	MODE=debug
 	OUT=bin/tagap-debug
-	ENV_VARS=VK_INSTANCE_LAYERS=VK_LAYER_MESA_overlay VK_LAYER_MESA_OVERLAY_CONFIG=position=top-left 
+	ENV_VARS=VK_INSTANCE_LAYERS=VK_LAYER_MESA_overlay VK_LAYER_MESA_OVERLAY_CONFIG=position=top-left
 endif
 
 OBJS=$(patsubst src/%.c,bin/$(MODE)/%.o,$(SRCS))
@@ -32,7 +32,7 @@ DEPS=$(patsubst src/%.c,bin/$(MODE)/%.d,$(SRCS))
 
 .PHONY: all clean run debug
 
-all: dirs $(OUT)
+all: dirs $(OUT) shaders
 
 dirs: $(DIRS)
 
@@ -55,8 +55,15 @@ $(OUT): $(OBJS)
 bin/$(MODE)/%.o: src/%.c Makefile
 	gcc -MMD -MP -c $< -o $@ $(CFLAGS) $(LDFLAGS)
 
+# Make directories we need for build
 $(DIRS):
 	mkdir $(DIRS)
 
+# Clean binaries
 clean:
 	rm -f $(shell find bin -type f)
+
+# Compile SPIR-V shaders
+shaders:
+	@echo "== compiling shaders ..."
+	@cd shader && make
