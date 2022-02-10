@@ -74,6 +74,37 @@ lookup_tagap_think(const char *t)
     return THINK_NONE;
 }
 
+enum tagap_entity_movetype_id
+{
+    MOVETYPE_NONE = 0, // Static entity
+    MOVETYPE_FLY,      // Flying/floating movement
+    MOVETYPE_WALK,     // Affected by gravity
+
+    MOVETYPE_COUNT,
+};
+
+static const char *MOVETYPE_NAMES[] =
+{
+    [MOVETYPE_NONE] = "NONE",
+    [MOVETYPE_FLY]  = "FLY",
+    [MOVETYPE_WALK] = "WALK",
+};
+
+
+static inline enum tagap_entity_movetype_id
+lookup_tagap_movetype(const char *m)
+{
+    for (u32 i = 0; i < MOVETYPE_COUNT; ++i)
+    {
+        if (strcmp(m, MOVETYPE_NAMES[i]) == 0)
+        {
+            return i;
+        }
+    }
+    LOG_WARN("[tagap_movetype] lookup of MOVETYPE '%s' yields nothing", m);
+    return THINK_NONE;
+}
+
 // Info loaded once globally at start of game
 struct tagap_entity_info
 {
@@ -97,36 +128,19 @@ struct tagap_entity_info
         f32 speed_mod;
         // ... AI attack reference and delay b/w attacks not implemented
     } think;
-};
 
-struct tagap_entity
-{
-    // Pointer to the entity info
-    struct tagap_entity_info *info;
-
-    // Position of the entity
-    vec2s position;
-
-    // Facing/angle
-    union
+    // Movetype info
+    struct tagap_entity_movetype
     {
-        bool facing;
-        f32 aim_angle;
-    };
+        enum tagap_entity_movetype_id type;
+        f32 speed;
+    } move;
 
-    // Entity sprites
-    struct tagap_sprite sprites[ENTITY_MAX_SPRITES];
+    // Collider size
+    // It seems like X-value is only useful one here for some reason
+    // Set with OFFSET SIZE command (will implement other OFFSETs in future)
+    vec2s colsize;
 };
-
-void entity_spawn(struct tagap_entity *);
-void entity_update(struct tagap_entity *);
-void entity_free(struct tagap_entity *);
-
-inline i32
-entity_get_rot(struct tagap_entity *e)
-{
-    return e->aim_angle;
-}
 
 // Copy info from @b to @a
 inline void
@@ -143,6 +157,67 @@ entity_info_clone(
     memcpy(a->stats, b->stats,
         ENTITY_STAT_COUNT * sizeof(struct tagap_entity_stat));
     memcpy(&a->think, &b->think, sizeof(struct tagap_entity_think));
+    memcpy(&a->move, &b->move, sizeof(struct tagap_entity_movetype));
+    a->colsize = b->colsize;
+}
+
+struct tagap_entity
+{
+    // Pointer to the entity info
+    struct tagap_entity_info *info;
+
+    // Position of the entity
+    vec2s position;
+
+    // Facing/angle
+    union
+    {
+        bool facing;
+        f32 aim_angle;
+    };
+    bool flipped;
+
+    // Entity sprites
+    struct tagap_sprite sprites[ENTITY_MAX_SPRITES];
+
+    struct tagap_entity_input
+    {
+        // Horizontal/vertical input levels
+        f32 horiz,
+            vert;
+        // Smoothed versions used for movement
+        f32 horiz_smooth,
+            vert_smooth;
+    } inputs;
+
+    // Normalised velocity
+    vec2s velo;
+
+    // Used for bobbing sprites
+    f32 bobbing_timer;
+
+    // Jumping stuff for walking entities
+    f32 jump_timer;
+    bool jump_reset;
+
+    // ANIM_FACE blinking
+    u64 next_blink;
+    i32 blinked_frames;
+};
+
+void entity_spawn(struct tagap_entity *);
+void entity_update(struct tagap_entity *);
+void entity_free(struct tagap_entity *);
+
+inline i32
+entity_get_rot(struct tagap_entity *e)
+{
+    if (e->info->think.mode == THINK_AI_AIM)
+    {
+        return e->aim_angle;
+    }
+
+    return 0;
 }
 
 #endif

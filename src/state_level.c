@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "tagap.h"
+#include "tagap_theme.h"
 #include "tagap_linedef.h"
 #include "tagap_entity.h"
 #include "tagap_polygon.h"
@@ -26,6 +27,12 @@ state_level_init(void)
     g_state.l.entity_infos =
         malloc(GAME_ENTITY_INFO_LIMIT * sizeof(struct tagap_entity_info));
     g_state.l.entity_info_count = 0;
+
+    g_state.l.theme_infos =
+        calloc(GAME_THEME_INFO_LIMIT, sizeof(struct tagap_theme_info));
+    g_state.l.theme_info_count = 1;
+
+    g_map->theme = &g_state.l.theme_infos[0];
 }
 
 void
@@ -56,6 +63,7 @@ state_level_deinit(void)
     free(g_map->polygons);
     free(g_map->entities);
     free(g_state.l.entity_infos);
+    free(g_state.l.theme_infos);
 }
 
 /*

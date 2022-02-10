@@ -5,6 +5,7 @@
 #include "tagap_linedef.h"
 #include "tagap_polygon.h"
 #include "tagap_script.h"
+#include "tagap_theme.h"
 
 // Top-level token
 enum atom_id
@@ -90,6 +91,12 @@ enum atom_id
     // + FLOAT: movement speed
     ATOM_MOVETYPE,
 
+    // Sets an offset value
+    // + STR: variable name
+    // + INT x offset
+    // + INT y offset
+    ATOM_OFFSET,
+
     // Defines entity sound
     // + STR: sound event
     // + STR: sample name
@@ -99,6 +106,20 @@ enum atom_id
     // + STR: variable name
     // + INT: value (not used with [toggle] variables)
     ATOM_STAT,
+
+    /*
+     * Theme commands
+     */
+    // Start theme
+    // STR: theme name
+    ATOM_THEME,
+    ATOM_THEME_END,
+
+    // Define theme colour
+    // BOOL: part of world to affect (0=world, 1=backgrounds)
+    // BOOL: target of colour shift (0=base, 1=shifted)
+    // BYTE x3: colours in RGB format
+    ATOM_COLOUR,
 
     // (internal) Number of atoms we implement
     ATOM_COUNT
@@ -120,8 +141,12 @@ static const char *ATOM_NAMES[] =
     [ATOM_SPRITEVAR]    = "SPRITEVAR",
     [ATOM_THINK]        = "THINK",
     [ATOM_MOVETYPE]     = "MOVETYPE",
+    [ATOM_OFFSET]       = "OFFSET",
     [ATOM_SOUND]        = "SOUND",
     [ATOM_STAT]         = "STAT",
+    [ATOM_THEME]        = "THEME",
+    [ATOM_THEME_END]    = "THEME_END",
+    [ATOM_COLOUR]       = "COLOR",
 };
 
 i32
@@ -147,8 +172,9 @@ tagap_script_run(const char *fpath)
     enum parsing_mode
     {
         TAGAP_PARSE_NORMAL = 0,
-        TAGAP_PARSE_POLYGON = 1,
-        TAGAP_PARSE_ENTITY = 2,
+        TAGAP_PARSE_POLYGON,
+        TAGAP_PARSE_ENTITY,
+        TAGAP_PARSE_THEME,
     } cur_parse_mode = TAGAP_PARSE_NORMAL;
 
     // Read the script file, line by line
@@ -165,6 +191,9 @@ tagap_script_run(const char *fpath)
         strcpy(line_tmp, line);
 
         enum atom_id atom = ATOM_UNKNOWN;
+
+    #define CUR_ENTITY_INFO \
+        &g_state.l.entity_infos[g_state.l.entity_info_count - 1]
 
         // Parse all the tokens in the line
         static const char *DELIM = " ";
@@ -208,6 +237,12 @@ tagap_script_run(const char *fpath)
                         if (atom == ATOM_ENTITY_END) goto entity_end;
                     } break;
 
+                    // Parsing a THEME
+                    case TAGAP_PARSE_THEME:
+                    {
+                        if (atom == ATOM_THEME_END) goto theme_end;
+                    } break;
+
                     // Normal parsing mode
                     case TAGAP_PARSE_NORMAL:
                     default: break;
@@ -246,6 +281,22 @@ tagap_script_run(const char *fpath)
                     LOG_INFO("[tagap_script] map: song is '%s'", token);
 
                     // TODO soundtrack
+                    break;
+                }
+                if (TOK_IS("map_scheme"))
+                {
+                    token = TOK_NEXT;
+                    LOG_INFO("[tagap_script] map: scheme is '%s'", token);
+
+                    // Find theme with this name
+                    for (u32 i = 0; i < g_state.l.theme_info_count; ++i)
+                    {
+                        if (strcmp(token, g_state.l.theme_infos[i].name) == 0)
+                        {
+                            lvl->theme = &g_state.l.theme_infos[i];
+                            break;
+                        }
+                    }
                     break;
                 }
 
@@ -382,9 +433,8 @@ tagap_script_run(const char *fpath)
                     goto next_line;
                 }
 
-                i32 index = g_state.l.entity_info_count;
-                struct tagap_entity_info *e =
-                    &g_state.l.entity_infos[index];
+                u32 index = g_state.l.entity_info_count;
+                struct tagap_entity_info *e = &g_state.l.entity_infos[index];
                 memset(e, 0, sizeof(struct tagap_entity_info));
 
                 if (strlen(token) >= ENTITY_NAME_MAX)
@@ -487,8 +537,7 @@ tagap_script_run(const char *fpath)
                 }
 
                 // Get current entity
-                struct tagap_entity_info *e =
-                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
                 entity_info_clone(e, to_copy, true);
             } goto next_line;
 
@@ -502,17 +551,19 @@ tagap_script_run(const char *fpath)
                 }
 
                 // Get current entity
-                struct tagap_entity_info *e =
-                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
 
                 // Check bounds
                 i32 sprite_index = e->sprite_info_count;
                 if (sprite_index + 1 >= ENTITY_MAX_SPRITES)
                 {
+                    LOG_ERROR("[tagap_script] SPRITE: too many sprites (%s:%d)",
+                        fpath, line_num);
                     goto next_line;
                 }
 
                 struct sprite_info info;
+                memset(&info, 0, sizeof(struct sprite_info));
 
                 // Loading parameter (ignored)
                 token = TOK_NEXT;
@@ -547,6 +598,47 @@ tagap_script_run(const char *fpath)
                 //LOG_DBUG("%d", e->sprite_info_count);
             } goto next_line;
 
+            // Defines sprite variable for entity sprite
+            case ATOM_SPRITEVAR:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] SPRITE: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
+
+                // 1st arg: sprite index
+                i32 spr_index = (i32)atoi(token);
+                token = TOK_NEXT;
+
+                // Get sprite
+                if (spr_index < 0 || spr_index >= ENTITY_MAX_SPRITES)
+                {
+                    LOG_ERROR("[tagap_script] SPRITEVAR: invalid index");
+                    goto next_line;
+                }
+
+                // 2nd arg: variable name
+                enum tagap_spritevar_id id = lookup_tagap_spritevar(token);
+
+                // Optional 3rd arg: variable value
+                token = TOK_NEXT;
+                if (token != NULL)
+                {
+                    // 3rd arg: variable value
+                    e->sprite_infos[spr_index].vars[id].value =
+                        (i32)atoi(token);
+                }
+                else
+                {
+                    // Set value to an initial true value for toggled variables
+                    e->sprite_infos[spr_index].vars[id].value = 1;
+                }
+            } goto next_line;
+
             // Defines entity AI routine
             case ATOM_THINK:
             {
@@ -557,8 +649,7 @@ tagap_script_run(const char *fpath)
                 }
 
                 // Get current entity
-                struct tagap_entity_info *e =
-                    &g_state.l.entity_infos[g_state.l.entity_info_count - 1];
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
 
                 // Get mode and speed modifier
                 e->think.mode = lookup_tagap_think(token);
@@ -566,6 +657,123 @@ tagap_script_run(const char *fpath)
                 e->think.speed_mod = (f32)atof(token);
 
                 // Skip other parameters as we don't care about them right now
+            } goto next_line;
+
+            // Defines entity move type
+            case ATOM_MOVETYPE:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] MOVETYPE: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
+
+                // Get mode and speed modifier
+                e->move.type = lookup_tagap_movetype(token);
+                token = TOK_NEXT;
+                e->move.speed = (f32)atof(token);
+
+                // Skip other parameters as we don't care about them right now
+            } goto next_line;
+
+            // Defines an offset variable for an entity
+            case ATOM_OFFSET:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] OFFSET: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
+
+                // For now we only implement the SIZE offset
+                // (likely will change in future)
+                if (strcmp(token, "SIZE") != 0) goto next_line;
+                token = TOK_NEXT;
+                if (token) { e->colsize.x = (f32)atoi(token); }
+                token = TOK_NEXT;
+                if (token) { e->colsize.y = (f32)atoi(token); }
+            } goto next_line;
+
+            // Begin theme definition
+            case ATOM_THEME:
+            {
+                // Make sure we don't exceed theme limit
+                if (g_state.l.theme_info_count + 1 >= GAME_THEME_INFO_LIMIT)
+                {
+                    LOG_ERROR("[tagap_script] THEME: limit (%d) exceeded",
+                        GAME_THEME_INFO_LIMIT);
+                    goto next_line;
+                }
+
+                u32 index = g_state.l.theme_info_count;
+                struct tagap_theme_info *t = &g_state.l.theme_infos[index];
+                memset(t, 0, sizeof(struct tagap_theme_info));
+
+                if (strlen(token) >= THEME_NAME_MAX)
+                {
+                    LOG_ERROR("[tagap_script] THEME: name is too "
+                        "long (max %d) in (%s:%d)",
+                        THEME_NAME_MAX, fpath, line_num);
+                    goto next_line;
+                }
+
+                cur_parse_mode = TAGAP_PARSE_THEME;
+                ++g_state.l.theme_info_count;
+
+                // Set the theme name
+                strcpy(t->name, token);
+            } goto next_line;
+
+            // Theme colour definition
+            case ATOM_COLOUR:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_THEME)
+                {
+                    LOG_ERROR("[tagap_script] COLOR: not on theme");
+                    goto next_line;
+                }
+
+                // Get current theme
+                struct tagap_theme_info *t =
+                    &g_state.l.theme_infos[g_state.l.theme_info_count - 1];
+
+                // Get 'affect'
+                enum tagap_theme_affect_id affect =
+                    (enum tagap_theme_affect_id)atoi(token);
+                token = TOK_NEXT;
+
+                // Get 'state'
+                enum tagap_theme_state state =
+                    (enum tagap_theme_state)atoi(token);
+                token = TOK_NEXT;
+
+                // Get RGB colour
+                i32 r = atoi(token);
+                token = TOK_NEXT;
+                i32 g = atoi(token);
+                token = TOK_NEXT;
+                i32 b = atoi(token);
+
+                t->colours[affect][state] = (vec3s)
+                {{
+                     (f32)r / 255.0f,
+                     (f32)g / 255.0f,
+                     (f32)b / 255.0f,
+                }};
+            } goto next_line;
+
+            // End theme definition
+            case ATOM_THEME_END:
+            theme_end:
+            {
+                // Reset to normal parsing mode
+                cur_parse_mode = TAGAP_PARSE_NORMAL;
             } goto next_line;
 
             // Skip unimplemented atoms

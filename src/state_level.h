@@ -19,6 +19,7 @@
 #define LEVEL_MAX_POLYGONS 512
 #define LEVEL_MAX_ENTITIES 1024
 #define GAME_ENTITY_INFO_LIMIT 1024
+#define GAME_THEME_INFO_LIMIT 32
 
 struct state_level
 {
@@ -44,6 +45,9 @@ struct state_level
         // Entities that have been added into the level
         struct tagap_entity *entities;
         i32 entity_count;
+
+        // Level theme
+        struct tagap_theme_info *theme;
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are
@@ -51,7 +55,12 @@ struct state_level
     struct tagap_entity_info *entity_infos;
     i32 entity_info_count;
 
+    // Theme definitions
+    struct tagap_theme_info *theme_infos;
+    i32 theme_info_count;
+
     // Player state
+    // (unused)
     struct player player;
 };
 

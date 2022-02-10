@@ -19,6 +19,11 @@
     _a < _b ? _a : _b; })
 #endif // min(a, b)
 
+#ifndef sign
+#define sign(_a) \
+    ((_a) > 0 ? 1 : ((_a) < 0 ? -1 : 0))
+#endif
+
 // Clamp scalar between a maximum and minimum.
 #ifndef clamp
 #define clamp(x, mn, mx) ({\

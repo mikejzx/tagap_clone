@@ -22,7 +22,9 @@ struct renderable
     struct ibuffer ib;
     i32 tex;
     vec2s pos;
+    vec2s offset;
     f32 rot;
+    bool flipped;
 };
 
 struct renderer

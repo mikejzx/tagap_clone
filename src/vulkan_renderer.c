@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "index_buffer.h"
 #include "tagap.h"
+#include "tagap_theme.h"
 #include "vertex_buffer.h"
 #include "vulkan_renderer.h"
 #include "vulkan_swapchain.h"
@@ -63,6 +64,7 @@ static i32 vulkan_end_oneshot_cmd(VkCommandBuffer);
 struct push_constants
 {
     mat4s mvp;
+    vec4s shading;
     int tex_index;
 };
 
@@ -1071,9 +1073,16 @@ vulkan_record_command_buffers(
             VK_INDEX_TYPE_UINT16);
 
         // Put MVP in push constants
+        f32 flip_sign = objs[o].flipped ? -1.0f : 1.0f;
         mat4s m_m = (mat4s)GLMS_MAT4_IDENTITY_INIT;
         m_m = glms_translate(m_m,
-            (vec3s){ objs[o].pos.x, objs[o].pos.y, 0.0f });
+            (vec3s)
+            {{
+                objs[o].pos.x + objs[o].offset.x * flip_sign,
+                objs[o].pos.y - objs[o].offset.y,
+                0.0f
+            }});
+        m_m.raw[0][0] *= flip_sign;
         m_m.raw[1][1] *= -1.0f;
         if (objs[o].rot != 0.0f)
         {
@@ -1089,6 +1098,16 @@ vulkan_record_command_buffers(
         const struct push_constants pconsts =
         {
             .mvp = glms_mat4_mul(m_p, glms_mat4_mul(m_v, m_m)),
+            .shading = (vec4s)
+            {{
+                 g_map->theme->colours
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].x,
+                 g_map->theme->colours
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].y,
+                 g_map->theme->colours
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].z,
+                 1.0f,
+            }},
             .tex_index = objs[o].tex,
         };
         vkCmdPushConstants(cbuf,
@@ -1721,7 +1740,7 @@ vulkan_texture_load(const char *path)
         return -1;
     }
 
-    LOG_DBUG("[stb_image] loaded image '%s'", path);
+    //LOG_DBUG("[stb_image] loaded image '%s'", path);
 
     // Create texture
     i32 status = vulkan_texture_create(pixels, w, h, size);

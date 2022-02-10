@@ -17,9 +17,11 @@ enum sprite_load_method
     SPRITE_DYNAMIC = 1,
 };
 
-enum sprite_var_id
+enum tagap_spritevar_id
 {
-    SPRITEVAR_ACTIVE = 0,
+    _SPRITEVAR_UNKNOWN = 0,
+
+    SPRITEVAR_ACTIVE,
     SPRITEVAR_AIM,
     SPRITEVAR_ANGLEFACTOR,
     SPRITEVAR_ANIMATE,
@@ -43,6 +45,46 @@ enum sprite_var_id
     _SPRITEVAR_COUNT,
 };
 
+static const char *SPRITEVAR_NAMES[] =
+{
+    [_SPRITEVAR_UNKNOWN]     = "",
+    [SPRITEVAR_ACTIVE]      = "ACTIVE",
+    [SPRITEVAR_AIM]         = "AIM",
+    [SPRITEVAR_ANGLEFACTOR] = "ANGLEFACTOR",
+    [SPRITEVAR_ANIMATE]     = "ANIMATE",
+    [SPRITEVAR_ANIMATE_TO]  = "ANIMATE_TO",
+    [SPRITEVAR_BIAS]        = "BIAS",
+    [SPRITEVAR_BOB]         = "BOB",
+    [SPRITEVAR_CHARGE]      = "CHARGE",
+    [SPRITEVAR_DIM]         = "DIM",
+    [SPRITEVAR_FACE]        = "FACE",
+    [SPRITEVAR_FLICKER]     = "FLICKER",
+    [SPRITEVAR_HIDE_MOVE]   = "HIDE_MOVE",
+    [SPRITEVAR_INACTIVE]    = "INACTIVE",
+    [SPRITEVAR_INVERTFACE]  = "INVERTFACE",
+    [SPRITEVAR_KEEPFRAME]   = "KEEPFRAME",
+    [SPRITEVAR_LAYER]       = "LAYER",
+    [SPRITEVAR_PULSE]       = "PULSE",
+    [SPRITEVAR_NOGROUND]    = "NOGROUND",
+    [SPRITEVAR_NOFACE]      = "NOFACE",
+    [SPRITEVAR_ROLL]        = "ROLL",
+    [SPRITEVAR_SCALE]       = "SCALE",
+};
+
+static inline enum tagap_spritevar_id
+lookup_tagap_spritevar(const char *v)
+{
+    for (u32 i = 0; i < _SPRITEVAR_COUNT; ++i)
+    {
+        if (strcmp(v, SPRITEVAR_NAMES[i]) == 0)
+        {
+            return i;
+        }
+    }
+    LOG_WARN("[tagap_think] lookup of SPRITEVAR '%s' yields nothing", v);
+    return _SPRITEVAR_UNKNOWN;
+}
+
 struct sprite_info
 {
     // Full bright flag
@@ -58,9 +100,9 @@ struct sprite_info
     char name[SPRITE_NAME_MAX];
 
     // Sprite variables
-    struct sprite_var
+    struct tagap_spritevar
     {
-        u32 value;
+        i32 value;
     } vars[_SPRITEVAR_COUNT];
 };
 
