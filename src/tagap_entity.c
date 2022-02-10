@@ -9,9 +9,8 @@
 static inline f32
 smooth_in(f32 v, f32 target)
 {
-    const f32 INPUT_GRAVITY = 0.06f;
+    const f32 INPUT_GRAVITY = 5.0f * DT;
 
-    // TODO: framerate-independant velocity
     if (v < target)
     {
         v += INPUT_GRAVITY;
@@ -214,10 +213,6 @@ entity_update(struct tagap_entity *e)
     {
         check_collision(e, &collision);
 
-        // Calculate smooth horizontal input
-        e->inputs.horiz_smooth =
-            smooth_in(e->inputs.horiz_smooth, e->inputs.horiz);
-
         // Jumping
         static const f32 MAX_JUMP_TIME = 0.30f;
         if (e->inputs.vert > 0.0f)
@@ -242,17 +237,17 @@ entity_update(struct tagap_entity *e)
         }
         if (e->jump_timer >= 0.0f)
         {
-            e->jump_timer += 1.0f / 60.0f;
+            e->jump_timer += DT;
         }
 
         // Apply gravity
         if (e->jump_timer < 0.0f)
         {
-            static const f32 GRAVITY_DEFAULT = -2.8f;
+            static const f32 GRAVITY_DEFAULT = -3.0f;
             // Not jumping; normal gravity
             if (e->velo.y > GRAVITY_DEFAULT)
             {
-                e->velo.y += 10.0f * GRAVITY_DEFAULT * 1.0f / 60.0f;
+                e->velo.y += 10.0f * GRAVITY_DEFAULT * DT;
             }
             else
             {
@@ -272,6 +267,14 @@ entity_update(struct tagap_entity *e)
             }
         }
 
+        // Keeps horizontal input during jump
+        if (!(!collision.below && e->inputs.horiz == 0.0f))
+        {
+            // Calculate smooth horizontal input
+            e->inputs.horiz_smooth =
+                smooth_in(e->inputs.horiz_smooth, e->inputs.horiz);
+        }
+
         // Move faster when walking in direction of facing
         static const f32 FORWARD_SPEED = 1.4f;
         f32 facing_mul = lerpf(1.0f,
@@ -283,7 +286,7 @@ entity_update(struct tagap_entity *e)
         if (collision.below && e->jump_timer < 0.0f)
         {
             // We are on a floor, so follow the floor's path
-            e->position.x += e->velo.x;
+            e->position.x += e->velo.x * DT * 60.0f;
             e->position.y =
                 collision.floor_gradient * e->position.x +
                 collision.floor_shift + e->info->colsize.x;
@@ -291,11 +294,11 @@ entity_update(struct tagap_entity *e)
         else
         {
             // Standard left/right movement
-            e->position.x += e->velo.x;
-            e->position.y += e->velo.y;
+            e->position.x += e->velo.x * DT * 60.0f;
+            e->position.y += e->velo.y * DT * 60.0f;
         }
 
-        e->bobbing_timer += e->velo.x * (f32)collision.below;
+        e->bobbing_timer += e->velo.x * DT * 60.0f * (f32)collision.below;
     } break;
 
     // Entity is "floating"
@@ -307,10 +310,10 @@ entity_update(struct tagap_entity *e)
         e->velo.x = smooth_in(e->velo.x, e->inputs.horiz);
         e->velo.y = smooth_in(e->velo.y, e->inputs.vert);
 
-        e->position.x += e->velo.x * e->info->move.speed;
-        e->position.y += e->velo.y * e->info->move.speed;
+        e->position.x += e->velo.x * DT * 60.0f * e->info->move.speed;
+        e->position.y += e->velo.y * DT * 60.0f * e->info->move.speed;
 
-        e->bobbing_timer += 1.0f;
+        e->bobbing_timer += DT;
     } break;
     }
 
@@ -384,10 +387,25 @@ entity_update(struct tagap_entity *e)
         // Update sprite positions
         switch(sprinfo->anim)
         {
-        case ANIM_WEAPON:
         case ANIM_WEAPON2:
         {
+            // Hide second weapon sprite if entity does not have akimbo
+            spr->r->hidden = !e->info->stats[STAT_S_AKIMBO];
+        }
+        // ... falls through
+        case ANIM_WEAPON:
+        {
             spr->r->rot = e->aim_angle;
+
+            // Use akimbo texture frame on uzi (slot 0) if we have it
+            u32 weapon_slot = 0;
+            u32 tex_slot = weapon_slot + 2;
+            if (weapon_slot == 0 &&
+                e->info->stats[STAT_S_AKIMBO])
+            {
+                tex_slot = 0;
+            }
+            spr->r->tex = spr->frames[tex_slot].tex_index;
         } break;
 
         // Head animation

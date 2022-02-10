@@ -50,7 +50,14 @@ struct tagap
 
     // Renderer
     struct vulkan_renderer vulkan;
+
+    // Internal state
+    u64 last_frame, last_sec;
+    f64 dt;
+    u32 draw_calls;
 };
+
+#define DT (g_state.dt)
 
 extern struct tagap g_state;
 

@@ -1056,6 +1056,7 @@ vulkan_record_command_buffers(
         VK_PIPELINE_BIND_POINT_GRAPHICS, g_vulkan->pipeline);
 
     static const VkDeviceSize offset = 0;
+    g_state.draw_calls = 0;
     for (i32 o = 0; o < obj_count; ++o)
     {
         // Skip hidden objects
@@ -1129,6 +1130,7 @@ vulkan_record_command_buffers(
         vkCmdDrawIndexed(cbuf,
             objs[o].ib.size / sizeof(u16),
             1, 0, 0, 0);
+        ++g_state.draw_calls;
     }
 
     // End render pass and end command buffer recording

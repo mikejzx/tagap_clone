@@ -700,6 +700,24 @@ tagap_script_run(const char *fpath)
                 if (token) { e->colsize.y = (f32)atoi(token); }
             } goto next_line;
 
+            // Defines STAT value for entity
+            case ATOM_STAT:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] OFFSET: not on entity");
+                    goto next_line;
+                }
+
+                // Get current entity
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
+
+                // Read stat ID and value
+                enum tagap_entity_stat_id id = lookup_tagap_stat(token);
+                token = TOK_NEXT;
+                if (token) e->stats[id] = (i32)atoi(token);
+            } goto next_line;
+
             // Begin theme definition
             case ATOM_THEME:
             {

@@ -53,6 +53,11 @@ main (i32 argc, char **argv)
     SDL_Event event;
     for (;;)
     {
+        const u64 now = NOW_NS();
+        u64 frame_delta = now - g_state.last_frame;
+        g_state.last_frame = now;
+        g_state.dt = (f64)frame_delta / NS_PER_SECOND;
+
         // Poll inputs
         static bool buttons[4] = { 0, 0, 0, 0 };
         while (SDL_PollEvent(&event))
@@ -149,6 +154,20 @@ main (i32 argc, char **argv)
         case GAME_STATE_LEVEL:
             // Update the level entities
             state_level_update_entities();
+
+            // Update status line
+            if (now - g_state.last_sec > NS_PER_SECOND)
+            {
+                g_state.last_sec = now;
+                printf("status: %d fps, %.3f delta, %d draw cmds %d tex     \r",
+                    (i32)floor(1.0d / g_state.dt),
+                    g_state.dt,
+                    g_state.draw_calls,
+                    g_vulkan->tex_used);
+                fflush(stdout);
+            }
+
+            //SDL_Delay(100);
             break;
         }
 

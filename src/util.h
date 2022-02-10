@@ -44,4 +44,14 @@
 #define sinerpf(_a, _b, _t) \
     lerpf((_a), (_b), sinf((_t) * 3.1415f * 0.5f))
 
+// Time utils
+#include <time.h>
+#define NS_PER_SECOND (1000000000)
+#define NS_PER_MS (1000000)
+// Current timestamp in nanoseconds
+#define NOW_NS() ({ \
+    struct timespec ts; \
+    timespec_get(&ts, TIME_UTC); \
+    ((ts.tv_sec * NS_PER_SECOND) + ts.tv_nsec);})
+
 #endif

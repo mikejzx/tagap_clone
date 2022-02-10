@@ -9,6 +9,8 @@
 // Values that can be applied to entities
 enum tagap_entity_stat_id
 {
+    STAT_UNKNOWN = 0,
+
     // AI stats
     // ...
 
@@ -26,6 +28,30 @@ enum tagap_entity_stat_id
 
     ENTITY_STAT_COUNT,
 };
+
+static const char *STAT_NAMES[] =
+{
+    [STAT_UNKNOWN] = "",
+    [STAT_CHARGE] = "CHARGE",
+    [STAT_DAMAGE] = "DAMAGE",
+    [STAT_S_AKIMBO] = "S_AKIMBO",
+    [STAT_S_HEALTH] = "S_HEALTH",
+    [STAT_S_WEAPON] = "S_WEAPON",
+};
+
+static inline enum tagap_entity_stat_id
+lookup_tagap_stat(const char *s)
+{
+    for (u32 i = 0; i < ENTITY_STAT_COUNT; ++i)
+    {
+        if (strcmp(s, STAT_NAMES[i]) == 0)
+        {
+            return i;
+        }
+    }
+    //LOG_WARN("[tagap_think] lookup of STAT '%s' yields nothing", s);
+    return STAT_UNKNOWN;
+}
 
 enum tagap_entity_think_id
 {
@@ -116,10 +142,7 @@ struct tagap_entity_info
     u32 sprite_info_count;
 
     // Stat info set with STAT
-    struct tagap_entity_stat
-    {
-        u32 value;
-    } stats[ENTITY_STAT_COUNT];
+    i32 stats[ENTITY_STAT_COUNT];
 
     // AI routine info
     struct tagap_entity_think
@@ -154,8 +177,7 @@ entity_info_clone(
     memcpy(a->sprite_infos, b->sprite_infos,
         ENTITY_MAX_SPRITES * sizeof(struct sprite_info));
     a->sprite_info_count = b->sprite_info_count;
-    memcpy(a->stats, b->stats,
-        ENTITY_STAT_COUNT * sizeof(struct tagap_entity_stat));
+    memcpy(a->stats, b->stats, ENTITY_STAT_COUNT * sizeof(i32));
     memcpy(&a->think, &b->think, sizeof(struct tagap_entity_think));
     memcpy(&a->move, &b->move, sizeof(struct tagap_entity_movetype));
     a->colsize = b->colsize;
