@@ -53,9 +53,9 @@ main (i32 argc, char **argv)
     SDL_Event event;
     for (;;)
     {
-        const u64 now = NOW_NS();
-        u64 frame_delta = now - g_state.last_frame;
-        g_state.last_frame = now;
+        g_state.now = NOW_NS();
+        u64 frame_delta = g_state.now - g_state.last_frame;
+        g_state.last_frame = g_state.now;
         g_state.dt = (f64)frame_delta / NS_PER_SECOND;
 
         // Poll inputs
@@ -152,13 +152,13 @@ main (i32 argc, char **argv)
             tagap_set_state(GAME_STATE_LEVEL);
             break;
         case GAME_STATE_LEVEL:
-            // Update the level entities
-            state_level_update_entities();
+            // Update the level
+            state_level_update();
 
             // Update status line
-            if (now - g_state.last_sec > NS_PER_SECOND)
+            if (g_state.now - g_state.last_sec > NS_PER_SECOND)
             {
-                g_state.last_sec = now;
+                g_state.last_sec = g_state.now;
                 printf("status: %d fps, %.3f delta, %d draw cmds %d tex     \r",
                     (i32)floor(1.0d / g_state.dt),
                     g_state.dt,

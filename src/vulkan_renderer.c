@@ -235,7 +235,7 @@ vulkan_create_instance(SDL_Window *handle)
         return -1;
     }
 
-#ifdef DEBUG
+//#ifdef DEBUG
     // Enumerate and print extensions in debug mode
     ext_count = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &ext_count, NULL);
@@ -248,7 +248,7 @@ vulkan_create_instance(SDL_Window *handle)
         printf("  * %s\n", ext[i].extensionName);
     }
     free(ext);
-#endif
+//#endif
 
     LOG_INFO("[vulkan] library initialised, instance created");
 
@@ -439,7 +439,7 @@ vulkan_get_physical_device(void)
         break;
     }
 
-#ifdef DEBUG
+//#ifdef DEBUG
     // Print the devices (and highlight device in use) in debug mode
     printf("[INFO] [vulkan] detected video cards:\n");
     for (i32 i = 0; i < gpu_count; ++i)
@@ -452,7 +452,7 @@ vulkan_get_physical_device(void)
             props.deviceName);
         break;
     }
-#endif
+//#endif
 
     free(gpus);
 
@@ -1062,6 +1062,76 @@ vulkan_record_command_buffers(
         // Skip hidden objects
         if (objs[o].hidden) continue;
 
+        // Cull objects that have bounds outside the viewport
+        // Extremely effective at more than doubling the FPS
+    #ifndef NO_CULLING
+        if (!objs[o].no_cull)
+        {
+            struct bounds
+            {
+                vec2s min, max;
+            };
+            const struct bounds viewport_bounds =
+            {
+                .min = (vec2s)
+                {{
+                    cam_pos.x,
+                    -cam_pos.y - HEIGHT,
+                }},
+                .max = (vec2s)
+                {{
+                    cam_pos.x + WIDTH,
+                    -cam_pos.y,
+                }},
+            };
+            struct bounds obj_bounds;
+            if (!objs[o].tex_scale)
+            {
+                obj_bounds = (struct bounds)
+                {
+                    .min = (vec2s)
+                    {{
+                        objs[o].pos.x + objs[o].bounds.min.x,
+                        objs[o].pos.y + objs[o].bounds.min.y
+                    }},
+                    .max = (vec2s)
+                    {{
+                        objs[o].pos.x + objs[o].bounds.max.x,
+                        objs[o].pos.y + objs[o].bounds.max.y
+                    }},
+                };
+            }
+            else
+            {
+                // Using texture size as bounds
+                f32 tw = (f32)g_vulkan->textures[objs[o].tex].w / 2.0f,
+                    th = (f32)g_vulkan->textures[objs[o].tex].h / 2.0f;
+                obj_bounds = (struct bounds)
+                {
+                    .min = (vec2s)
+                    {{
+                        objs[o].pos.x - tw,
+                        -objs[o].pos.y - tw
+                    }},
+                    .max = (vec2s)
+                    {{
+                        objs[o].pos.x + tw,
+                        -objs[o].pos.y + th
+                    }},
+                };
+            }
+            bool in_aabb =
+                obj_bounds.min.x < viewport_bounds.max.x &&
+                obj_bounds.max.x > viewport_bounds.min.x &&
+                obj_bounds.min.y < viewport_bounds.max.y &&
+                obj_bounds.max.y > viewport_bounds.min.y;
+            if (!in_aabb)
+            {
+                continue;
+            }
+        }
+    #endif
+
         // Bind vertex and index buffers
         vkCmdBindVertexBuffers(cbuf,
             0,
@@ -1088,6 +1158,15 @@ vulkan_record_command_buffers(
         if (objs[o].rot != 0.0f)
         {
             m_m = glms_rotate_z(m_m, glm_rad(objs[o].rot));
+        }
+        if (objs[o].tex_scale)
+        {
+            m_m = glms_scale(m_m, (vec3s)
+            {{
+                (f32)g_vulkan->textures[objs[o].tex].w,
+                (f32)g_vulkan->textures[objs[o].tex].h,
+                1.0f,
+            }});
         }
         mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
         m_v = glms_translate(m_v,

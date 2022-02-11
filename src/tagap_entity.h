@@ -216,7 +216,7 @@ struct tagap_entity
     vec2s velo;
 
     // Used for bobbing sprites
-    f32 bobbing_timer;
+    f32 bobbing_timer, bobbing_timer_last;
 
     // Jumping stuff for walking entities
     f32 jump_timer;
@@ -224,7 +224,7 @@ struct tagap_entity
 
     // ANIM_FACE blinking
     u64 next_blink;
-    i32 blinked_frames;
+    f32 blink_timer;
 };
 
 void entity_spawn(struct tagap_entity *);

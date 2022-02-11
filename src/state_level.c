@@ -99,7 +99,7 @@ state_level_spawn_entities()
  * Update all entities in the level
  */
 void
-state_level_update_entities()
+state_level_update()
 {
     for (u32 i = 0; i < g_map->entity_count; ++i)
     {

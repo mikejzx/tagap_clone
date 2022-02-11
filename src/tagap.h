@@ -52,7 +52,7 @@ struct tagap
     struct vulkan_renderer vulkan;
 
     // Internal state
-    u64 last_frame, last_sec;
+    u64 now, last_frame, last_sec;
     f64 dt;
     u32 draw_calls;
 };

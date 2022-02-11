@@ -18,6 +18,7 @@
 struct renderable
 {
     bool hidden;
+    bool tex_scale;
     struct vbuffer vb;
     struct ibuffer ib;
     i32 tex;
@@ -25,6 +26,13 @@ struct renderable
     vec2s offset;
     f32 rot;
     bool flipped;
+
+    // For culling objects outside of the viewport
+    struct
+    {
+        vec2s min, max;
+    } bounds;
+    bool no_cull;
 };
 
 struct renderer

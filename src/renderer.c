@@ -87,13 +87,22 @@ renderer_add_polygon(struct tagap_polygon *p)
         (f32)g_vulkan->textures[tex_index].h,
     };
 
+    r->bounds.min.x = FLT_MAX;
+    r->bounds.min.y = FLT_MAX;
+    r->bounds.max.x = FLT_MIN;
+    r->bounds.max.y = FLT_MIN;
+
     size_t vertices_size = sizeof(struct vertex) * p->point_count;
     struct vertex *vertices = malloc(vertices_size);
     for (u32 i = 0; i < p->point_count; ++i)
     {
+        /*
+         * Calculate vertex
+         */
+        const vec2s pos = p->points[i];
         vertices[i] = (struct vertex)
         {
-            .pos = p->points[i],
+            .pos = pos,
             .texcoord = (vec2s)
             {{
                  -(p->points[p->tex_offset_point].x - p->points[i].x)
@@ -102,6 +111,15 @@ renderer_add_polygon(struct tagap_polygon *p)
                      / tex_size.y,
             }},
         };
+
+        /*
+         * Calculate bounds
+         */
+        // Min X
+        if (pos.x < r->bounds.min.x) { r->bounds.min.x = pos.x; }
+        if (pos.y < r->bounds.min.y) { r->bounds.min.y = pos.y; }
+        if (pos.x > r->bounds.max.x) { r->bounds.max.x = pos.x; }
+        if (pos.y > r->bounds.max.y) { r->bounds.max.y = pos.y; }
     }
     vb_new(&r->vb, vertices, vertices_size);
     free(vertices);
@@ -264,6 +282,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
                 "(style %d) with %d lines", info->style, cur_l);
             memset(r, 0, sizeof(struct renderable));
             r->tex = tex_index;
+            r->no_cull = true;
             vb_new(&r->vb, info->v, info->v_size);
             ib_new(&r->ib, info->i, info->i_size);
         }

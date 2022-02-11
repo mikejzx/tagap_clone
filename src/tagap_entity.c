@@ -95,8 +95,9 @@ entity_spawn(struct tagap_entity *e)
         spr->r = renderer_get_renderable();
 
         // Create quad for the sprite
-        f32 w = (f32)g_vulkan->textures[spr->frames[0].tex_index].w / 2.0f,
-            h = (f32)g_vulkan->textures[spr->frames[0].tex_index].h / 2.0f;
+        //f32 w = (f32)g_vulkan->textures[spr->frames[0].tex_index].w / 2.0f,
+        //    h = (f32)g_vulkan->textures[spr->frames[0].tex_index].h / 2.0f;
+        f32 w = 0.5f, h = 0.5f;
         const struct vertex vertices[4] =
         {
             // Top left
@@ -141,6 +142,14 @@ entity_spawn(struct tagap_entity *e)
         {
             spr->r->rot = 0;
             spr->r->flipped = !!e->facing;
+        }
+        // We want the renderer to do the scaling for us
+        spr->r->tex_scale = true;
+
+        // Don't waste CPU cycles doing culling calculations on player sprites
+        if (e->info->think.mode == THINK_AI_USER)
+        {
+            spr->r->no_cull = true;
         }
     }
 }
@@ -243,7 +252,7 @@ entity_update(struct tagap_entity *e)
         // Apply gravity
         if (e->jump_timer < 0.0f)
         {
-            static const f32 GRAVITY_DEFAULT = -3.0f;
+            static const f32 GRAVITY_DEFAULT = -3.2f;
             // Not jumping; normal gravity
             if (e->velo.y > GRAVITY_DEFAULT)
             {
@@ -298,7 +307,39 @@ entity_update(struct tagap_entity *e)
             e->position.y += e->velo.y * DT * 60.0f;
         }
 
-        e->bobbing_timer += e->velo.x * DT * 60.0f * (f32)collision.below;
+        if (collision.below)
+        {
+            e->bobbing_timer += e->velo.x * DT * 20.0f;
+            e->bobbing_timer = fmodf(e->bobbing_timer, 2.0f * GLM_PI);
+        }
+        else
+        {
+            // This is a bit tricky; this is to move the player's leg 'forward'
+            // when they are in mid-air.  The fmodf in the above block clamps
+            // the angle from 0 to 2pi radians.  We need the angle to be at
+            // pi/2 rad (90 deg) for the desired effect, and adjust the bobbing
+            // timer as such to get there
+            if (e->bobbing_timer > GLM_PI_2)
+            {
+                // Send bob timer backwards to get to 90 degrees
+                e->bobbing_timer = clamp(
+                    e->bobbing_timer - DT * 20.0f,
+                    GLM_PI_2,
+                    2.0f * GLM_PI);
+            }
+            else if (e->bobbing_timer < GLM_PI_2)
+            {
+                // Send bob timer forwards to get to 90 degrees
+                e->bobbing_timer = clamp(
+                    e->bobbing_timer + DT * 20.0f,
+                    0.0f,
+                    GLM_PI_2);
+            }
+            else
+            {
+                e->bobbing_timer = GLM_PI_2;
+            }
+        }
     } break;
 
     // Entity is "floating"
@@ -328,6 +369,14 @@ entity_update(struct tagap_entity *e)
         }};
     }
 
+    // TODO: only enable bobbing if entity during load detects that sprites
+    // need bobbing
+    f32 bob_sin = 0.0f;
+    if (e->info->sprite_info_count)
+    {
+        bob_sin = sinf(e->bobbing_timer);
+    }
+
     // Update sprites
     for (u32 s = 0; s < e->info->sprite_info_count; ++s)
     {
@@ -337,7 +386,6 @@ entity_update(struct tagap_entity *e)
         // SPRITEVAR animations/bobbing effects
         vec2s sprite_offset = (vec2s)GLMS_VEC2_ZERO_INIT;
         f32 sprite_rot_offset = 0.0f;
-        f32 bob_sin = sinf(e->bobbing_timer / 3.0f);
         if (sprinfo->vars[SPRITEVAR_BOB].value && e->velo.x != 0.0f)
         {
             // Bobbing animation
@@ -398,14 +446,22 @@ entity_update(struct tagap_entity *e)
             spr->r->rot = e->aim_angle;
 
             // Use akimbo texture frame on uzi (slot 0) if we have it
-            u32 weapon_slot = 0;
+            u32 weapon_slot = 4; //e->info->stats[STAT_S_WEAPON];
             u32 tex_slot = weapon_slot + 2;
             if (weapon_slot == 0 &&
                 e->info->stats[STAT_S_AKIMBO])
             {
                 tex_slot = 0;
             }
-            spr->r->tex = spr->frames[tex_slot].tex_index;
+            if (tex_slot < spr->frame_count)
+            {
+                spr->r->tex = spr->frames[tex_slot].tex_index;
+            }
+            else
+            {
+                spr->r->tex = spr->frames[0].tex_index;
+                spr->r->hidden = true;
+            }
         } break;
 
         // Head animation
@@ -417,17 +473,21 @@ entity_update(struct tagap_entity *e)
             }
 
             // Blink animation
-            if (SDL_GetTicks() > e->next_blink)
+            if (g_state.now > e->next_blink)
             {
-                e->next_blink = SDL_GetTicks() + (rand() % 3500) + 500;
-                e->blinked_frames = 0;
+                e->next_blink = g_state.now +
+                    ((rand() % 4000) + 600) * NS_PER_MS;
+                e->blink_timer = 0.0f;
+            }
+            if (e->blink_timer < 0.2f)
+            {
                 spr->r->tex = spr->frames[1].tex_index;
             }
-            else if (e->blinked_frames > 8)
+            else
             {
                 spr->r->tex = spr->frames[0].tex_index;
             }
-            ++e->blinked_frames;
+            e->blink_timer += DT;
         } break;
 
         // No animation
@@ -489,7 +549,9 @@ check_collision(
              * Floor collision check
              */
             // If we collide with floor
-            if (!c->below &&
+            if ((l->style == LINEDEF_STYLE_FLOOR ||
+                    l->style == LINEDEF_STYLE_PLATE_FLOOR) &&
+                !c->below &&
                 e->position.y - e->info->colsize.x <= y_line &&
                 e->position.y >= y_line)
             {

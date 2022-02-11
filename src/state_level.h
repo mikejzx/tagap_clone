@@ -4,6 +4,7 @@
 #include "types.h"
 #include "player.h"
 #include "tagap_script.h"
+#include "tagap_weapon.h"
 
 /*
  * state_level.h
@@ -59,6 +60,9 @@ struct state_level
     struct tagap_theme_info *theme_infos;
     i32 theme_info_count;
 
+    // Weapon slots
+    struct tagap_weapon weapons[WEAPON_SLOT_COUNT];
+
     // Player state
     // (unused)
     struct player player;
@@ -72,7 +76,7 @@ void state_level_deinit(void);
 
 void state_level_submit_to_renderer(void);
 void state_level_spawn_entities(void);
-void state_level_update_entities(void);
+void state_level_update(void);
 
 static inline i32
 level_load(const char *fpath)

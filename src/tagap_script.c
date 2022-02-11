@@ -41,6 +41,13 @@ enum atom_id
     // Indicates end of polygon definition
     ATOM_POLYGON_END,
 
+    // Defines a weapon slot
+    // INT: weapon slot ID
+    // STR: primary weapon entity name
+    // STR: secondary weapon entity name
+    // STR: weapon display name
+    ATOM_WEAPON,
+
     // Adds entity into the level
     // STR: entity name
     // INT: entity X coordinates
@@ -133,6 +140,7 @@ static const char *ATOM_NAMES[] =
     [ATOM_POLYGON]      = "POLYGON",
     [ATOM_POLYPOINT]    = "POLYPOINT",
     [ATOM_POLYGON_END]  = "POLYGON_END",
+    [ATOM_WEAPON]       = "WEAPON",
     [ATOM_ENTITY_SET]   = "ENTITY_SET",
     [ATOM_ENTITY_START] = "ENTITY_START",
     [ATOM_ENTITY_END]   = "ENTITY_END",
@@ -149,6 +157,11 @@ static const char *ATOM_NAMES[] =
     [ATOM_COLOUR]       = "COLOR",
 };
 
+/*
+ * TODO: seperate command parsing to another function and allow running
+ *       scripts via strings.  store parser state in some static struct or
+ *       something (make sure to only allow 1 script to run at a time)
+ */
 i32
 tagap_script_run(const char *fpath)
 {
@@ -178,7 +191,7 @@ tagap_script_run(const char *fpath)
     } cur_parse_mode = TAGAP_PARSE_NORMAL;
 
     // Read the script file, line by line
-    size_t len = 0, ltmp, line_num = 0;
+    size_t len = 0, ltmp, line_num = 1;
     char *line_tmp = malloc(256 * sizeof(char));
     for (char *line = NULL; (len = getline(&line, &ltmp, fp)) != -1; ++line_num)
     {
@@ -250,6 +263,11 @@ tagap_script_run(const char *fpath)
 
                     break;
                 }
+
+                // Unidentified atom, skip to next line
+                if (!atom) goto next_line;
+
+                // We got an atom, continue parsing this line
                 continue;
             }
 
@@ -420,6 +438,93 @@ tagap_script_run(const char *fpath)
                         cur_poly->points[i].x, cur_poly->points[i].y);
                 }
             #endif
+            } goto next_line;
+
+            // Define weapon slot
+            case ATOM_WEAPON:
+            {
+                if (!token)
+                {
+                    LOG_ERROR("[tagap_script] WEAPON: missing slot (%s:%d)",
+                        fpath, line_num);
+                    goto next_line;
+                }
+                i32 slot = (i32)atoi(token);
+                if (slot < 0 || slot >= WEAPON_DISPLAY_NAME_MAX)
+                {
+                    LOG_ERROR("[tagap_script] WEAPON: invalid slot %d (%s:%d)",
+                        slot, fpath, line_num);
+                    goto next_line;
+                }
+                struct tagap_weapon *weap = &g_state.l.weapons[slot];
+
+                // Get primary entity
+                token = TOK_NEXT;
+                if (!token)
+                {
+                    LOG_ERROR("[tagap_script] WEAPON: missing primary (%s:%d)",
+                        fpath, line_num);
+                    goto next_line;
+                }
+                weap->primary = NULL;
+                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
+                {
+                    struct tagap_entity_info *e = &g_state.l.entity_infos[i];
+                    if (strcmp(e->name, token) == 0)
+                    {
+                        weap->primary  = e;
+                        break;
+                    }
+                }
+                if (!weap->primary)
+                {
+                    LOG_WARN("[tagap_script] WEAPON: can't find "
+                        "primary entity '%s'", token);
+                }
+
+                // Get secondary entity
+                token = TOK_NEXT;
+                if (!token)
+                {
+                    LOG_ERROR("[tagap_script] WEAPON: missing "
+                        "secondary (%s:%d)", fpath, line_num);
+                    goto next_line;
+                }
+                weap->secondary = NULL;
+                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
+                {
+                    struct tagap_entity_info *e = &g_state.l.entity_infos[i];
+                    if (strcmp(e->name, token) == 0)
+                    {
+                        weap->secondary  = e;
+                        break;
+                    }
+                }
+                if (!weap->secondary)
+                {
+                    LOG_WARN("[tagap_script] WEAPON: can't find "
+                        "secondary entity '%s'", token);
+                }
+
+                // Get display name
+                token = TOK_NEXT;
+                if (!token)
+                {
+                    LOG_WARN("[tagap_script] WEAPON: missing "
+                        "display name (%s:%d)", fpath, line_num);
+                    strcpy(g_state.l.weapons[slot].display_name, "(null)");
+                }
+                else if (strlen(token) >= WEAPON_DISPLAY_NAME_MAX)
+                {
+                    LOG_ERROR("[tagap_script] WEAPON: name '%s' too long",
+                        token);
+                    strcpy(g_state.l.weapons[slot].display_name, "(null)");
+                }
+                else
+                {
+                    // Copy display name
+                    strcpy(g_state.l.weapons[slot].display_name, token);
+                }
             } goto next_line;
 
             // Begin entity info definition
@@ -795,8 +900,7 @@ tagap_script_run(const char *fpath)
             } goto next_line;
 
             // Skip unimplemented atoms
-            default:
-                break;
+            default: goto next_line;
             }
         }
 
