@@ -69,6 +69,9 @@ struct vulkan_renderer
         u32 w, h;
     } textures[MAX_TEXTURES];
     i32 tex_used;
+    VkDescriptorImageInfo *image_desc_infos;
+    VkDescriptorImageInfo sampler_desc_info;
+    bool in_level;
 };
 
 extern struct vulkan_renderer *g_vulkan;

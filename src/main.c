@@ -159,11 +159,13 @@ main (i32 argc, char **argv)
             if (g_state.now - g_state.last_sec > NS_PER_SECOND)
             {
                 g_state.last_sec = g_state.now;
-                printf("status: %d fps, %.3f delta, %d draw cmds %d tex     \r",
+                printf("status: %d fps, %.3f delta, %d draw cmds %d tex %d tmpe"
+                    "    \r",
                     (i32)floor(1.0d / g_state.dt),
                     g_state.dt,
                     g_state.draw_calls,
-                    g_vulkan->tex_used);
+                    g_vulkan->tex_used,
+                    g_map->tmp_entity_count);
                 fflush(stdout);
             }
 

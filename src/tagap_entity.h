@@ -6,6 +6,10 @@
 #define ENTITY_NAME_MAX 128
 #define ENTITY_MAX_SPRITES 32
 
+/*
+ * TODO: create auto-generators for lookup_ functions
+ */
+
 // Values that can be applied to entities
 enum tagap_entity_stat_id
 {
@@ -17,6 +21,7 @@ enum tagap_entity_stat_id
     // Misc
     STAT_CHARGE,
     STAT_DAMAGE,
+    STAT_TEMPMISSILE,
 
     // FX stats
     // ...
@@ -31,12 +36,13 @@ enum tagap_entity_stat_id
 
 static const char *STAT_NAMES[] =
 {
-    [STAT_UNKNOWN] = "",
-    [STAT_CHARGE] = "CHARGE",
-    [STAT_DAMAGE] = "DAMAGE",
-    [STAT_S_AKIMBO] = "S_AKIMBO",
-    [STAT_S_HEALTH] = "S_HEALTH",
-    [STAT_S_WEAPON] = "S_WEAPON",
+    [STAT_UNKNOWN]     = "",
+    [STAT_CHARGE]      = "CHARGE",
+    [STAT_DAMAGE]      = "DAMAGE",
+    [STAT_TEMPMISSILE] = "TEMPMISSILE",
+    [STAT_S_AKIMBO]    = "S_AKIMBO",
+    [STAT_S_HEALTH]    = "S_HEALTH",
+    [STAT_S_WEAPON]    = "S_WEAPON",
 };
 
 static inline enum tagap_entity_stat_id
@@ -116,7 +122,6 @@ static const char *MOVETYPE_NAMES[] =
     [MOVETYPE_WALK] = "WALK",
 };
 
-
 static inline enum tagap_entity_movetype_id
 lookup_tagap_movetype(const char *m)
 {
@@ -131,15 +136,61 @@ lookup_tagap_movetype(const char *m)
     return THINK_NONE;
 }
 
+enum tagap_entity_offset_id
+{
+    OFFSET_UNKNOWN = 0,
+    OFFSET_CONST_VELOCITY,
+    OFFSET_FX_CONSTANT_FLOAT,
+    OFFSET_FX_DEATHEFFECT,
+    OFFSET_FX_OFFSET,
+    OFFSET_MODEL_OFFSET,
+    OFFSET_SIZE,
+    OFFSET_WEAPON_CASING,
+    OFFSET_WEAPON_MISSILE,
+    OFFSET_WEAPON_OFFSET,
+    OFFSET_WEAPON_ORIGIN,
+
+    ENTITY_OFFSET_COUNT,
+};
+
+static const char *OFFSET_NAMES[] =
+{
+    [OFFSET_UNKNOWN] = "",
+    [OFFSET_CONST_VELOCITY] = "CONST_VELOCITY",
+    [OFFSET_FX_CONSTANT_FLOAT] = "FX_CONSTANT_FLOAT",
+    [OFFSET_FX_DEATHEFFECT] = "FX_DEATHEFFECT",
+    [OFFSET_FX_OFFSET] = "FX_OFFSET",
+    [OFFSET_MODEL_OFFSET] = "MODEL_OFFSET",
+    [OFFSET_SIZE] = "SIZE",
+    [OFFSET_WEAPON_CASING] = "WEAPON_CASING",
+    [OFFSET_WEAPON_MISSILE] = "WEAPON_MISSILE",
+    [OFFSET_WEAPON_OFFSET] = "WEAPON_OFFSET",
+    [OFFSET_WEAPON_ORIGIN] = "WEAPON_ORIGIN",
+};
+
+static inline enum tagap_entity_offset_id
+lookup_tagap_offset(const char *o)
+{
+    for (u32 i = 0; i < ENTITY_OFFSET_COUNT; ++i)
+    {
+        if (strcmp(o, OFFSET_NAMES[i]) == 0)
+        {
+            return i;
+        }
+    }
+    LOG_WARN("[tagap_movetype] lookup of OFFSET '%s' yields nothing", o);
+    return OFFSET_UNKNOWN;
+}
+
 // Info loaded once globally at start of game
 struct tagap_entity_info
 {
     char name[ENTITY_NAME_MAX];
 
-    // Sprite info set with SPRITE
-    // SPRITEVAR modifies the vars member of this
-    struct sprite_info sprite_infos[ENTITY_MAX_SPRITES];
-    u32 sprite_info_count;
+    // List of sprite infos this entity uses, and the particular quirks applied
+    // to them on this particular entityy
+    struct tagap_entity_sprite sprites[ENTITY_MAX_SPRITES];
+    u32 sprite_count;
 
     // Stat info set with STAT
     i32 stats[ENTITY_STAT_COUNT];
@@ -149,7 +200,8 @@ struct tagap_entity_info
     {
         enum tagap_entity_think_id mode;
         f32 speed_mod;
-        // ... AI attack reference and delay b/w attacks not implemented
+        //enum tagap_entity_think_attack_id attack;
+        f32 attack_speed;
     } think;
 
     // Movetype info
@@ -162,7 +214,7 @@ struct tagap_entity_info
     // Collider size
     // It seems like X-value is only useful one here for some reason
     // Set with OFFSET SIZE command (will implement other OFFSETs in future)
-    vec2s colsize;
+    vec2s offsets[ENTITY_OFFSET_COUNT];
 };
 
 // Copy info from @b to @a
@@ -174,19 +226,25 @@ entity_info_clone(
 {
     if (!skip_name) strcpy(a->name, b->name);
 
-    memcpy(a->sprite_infos, b->sprite_infos,
-        ENTITY_MAX_SPRITES * sizeof(struct sprite_info));
-    a->sprite_info_count = b->sprite_info_count;
+    memcpy(a->sprites, b->sprites,
+        ENTITY_MAX_SPRITES * sizeof(struct tagap_entity_sprite));
+    a->sprite_count = b->sprite_count;
     memcpy(a->stats, b->stats, ENTITY_STAT_COUNT * sizeof(i32));
     memcpy(&a->think, &b->think, sizeof(struct tagap_entity_think));
     memcpy(&a->move, &b->move, sizeof(struct tagap_entity_movetype));
-    a->colsize = b->colsize;
+    memcpy(a->offsets, b->offsets, ENTITY_OFFSET_COUNT * sizeof(vec2s));
 }
 
 struct tagap_entity
 {
     // Pointer to the entity info
     struct tagap_entity_info *info;
+
+    // Entity that 'owns' this one (e.g. missile owned by player who fired it)
+    struct tagap_entity *owner;
+
+    // Whether this entity is active or not
+    bool active;
 
     // Position of the entity
     vec2s position;
@@ -199,8 +257,8 @@ struct tagap_entity
     };
     bool flipped;
 
-    // Entity sprites
-    struct tagap_sprite sprites[ENTITY_MAX_SPRITES];
+    // Entity sprite instances
+    struct renderable *sprites[ENTITY_MAX_SPRITES];
 
     struct tagap_entity_input
     {
@@ -210,6 +268,9 @@ struct tagap_entity
         // Smoothed versions used for movement
         f32 horiz_smooth,
             vert_smooth;
+
+        // Whether to fire weapon
+        bool fire;
     } inputs;
 
     // Normalised velocity
@@ -225,6 +286,21 @@ struct tagap_entity
     // ANIM_FACE blinking
     u64 next_blink;
     f32 blink_timer;
+
+    // Missile stuff
+    f32 timer_tempmissile;
+    f32 attack_timer;
+
+    // Pooling
+    // Pool owner stuff
+    struct pooled_entity
+    {
+        i32 mark;
+        struct tagap_entity *e;
+    } pool[128];
+    u32 pool_count;
+    // Pooled object info
+    bool pooled;
 };
 
 void entity_spawn(struct tagap_entity *);
@@ -234,7 +310,8 @@ void entity_free(struct tagap_entity *);
 inline i32
 entity_get_rot(struct tagap_entity *e)
 {
-    if (e->info->think.mode == THINK_AI_AIM)
+    if (e->info->think.mode == THINK_AI_AIM ||
+        e->info->think.mode == THINK_AI_MISSILE)
     {
         return e->aim_angle;
     }

@@ -3,6 +3,7 @@
 #include "tagap_anim.h"
 #include "tagap_entity.h"
 #include "tagap_linedef.h"
+#include "tagap_sprite.h"
 #include "tagap_polygon.h"
 #include "tagap_script.h"
 #include "tagap_theme.h"
@@ -598,6 +599,7 @@ tagap_script_run(const char *fpath)
                 //LOG_DBUG("[tagap_script] adding entity (%s)", token);
 
                 struct tagap_entity e;
+                memset(&e, 0, sizeof(struct tagap_entity));
                 e.info = ei;
 
                 // X coordinate
@@ -611,6 +613,10 @@ tagap_script_run(const char *fpath)
                 // Entity angle or facing
                 token = TOK_NEXT;
                 e.aim_angle = (int)atoi(token);
+
+                // Activity state (unimplemented)
+                //token = TOK_NEXT;
+                //e.active = !!atoi(token);
 
                 lvl->entities[lvl->entity_count++] = e;
             } goto next_line;
@@ -655,52 +661,91 @@ tagap_script_run(const char *fpath)
                     goto next_line;
                 }
 
-                // Get current entity
+                // Get current entity to set sprite on
                 struct tagap_entity_info *e = CUR_ENTITY_INFO;
 
-                // Check bounds
-                i32 sprite_index = e->sprite_info_count;
-                if (sprite_index + 1 >= ENTITY_MAX_SPRITES)
+                // Check bounds of entity sprite list
+                i32 spr_entity_index = e->sprite_count;
+                if (spr_entity_index + 1 >= ENTITY_MAX_SPRITES)
                 {
                     LOG_ERROR("[tagap_script] SPRITE: too many sprites (%s:%d)",
                         fpath, line_num);
                     goto next_line;
                 }
 
-                struct sprite_info info;
-                memset(&info, 0, sizeof(struct sprite_info));
+                // Temporary sprite for us to work with here
+                struct tagap_entity_sprite spr_entity;
+                memset(&spr_entity, 0, sizeof(struct tagap_entity_sprite));
 
                 // Loading parameter (ignored)
                 token = TOK_NEXT;
 
                 // Bright flag
-                info.bright = !!atoi(token);
+                spr_entity.bright = !!atoi(token);
                 token = TOK_NEXT;
 
                 // Animation
-                info.anim = lookup_tagap_anim(token);
+                spr_entity.anim = lookup_tagap_anim(token);
                 token = TOK_NEXT;
 
                 // Offset
-                info.offset.x = (f32)atoi(token);
+                spr_entity.offset.x = (f32)atoi(token);
                 token = TOK_NEXT;
-                info.offset.y = (f32)atoi(token);
+                spr_entity.offset.y = (f32)atoi(token);
                 token = TOK_NEXT;
 
-                // Name
+                // Sprite name
+                if (token == NULL)
+                {
+                    LOG_ERROR("[tagap_script] SPRITE: missing name in (%s:%d)",
+                        fpath, line_num);
+                    goto next_line;
+                }
                 if (strlen(token) > SPRITE_NAME_MAX)
                 {
-                    LOG_ERROR("[tagap_script] sprite name is too "
+                    LOG_ERROR("[tagap_script] SPRITE: name is too "
                         "long (max %d) in (%s:%d)",
                         SPRITE_NAME_MAX, fpath, line_num);
                     goto next_line;
                 }
-                strcpy(info.name, token);
 
-                // Set the sprite info
-                e->sprite_infos[sprite_index] = info;
-                ++e->sprite_info_count;
-                //LOG_DBUG("%d", e->sprite_info_count);
+                // Try find the sprite in global list
+                struct tagap_sprite_info *info = NULL;
+                for (u32 i = 0; i < g_state.l.sprite_info_count; ++i)
+                {
+                    if (strcmp(g_state.l.sprite_infos[i].name, token) == 0)
+                    {
+                        info = &g_state.l.sprite_infos[i];
+                        //LOG_DBUG("reuse %s at %d", token, spr_global_index);
+                        break;
+                    }
+                }
+                if (info == NULL)
+                {
+                    // Sprite has not been added to the list yet.  Add it now
+                    i32 spr_global_index = g_state.l.sprite_info_count;
+
+                    // Check that the global sprite list isn't full
+                    if (spr_global_index + 1 >= GAME_SPRITE_INFO_LIMIT)
+                    {
+                        LOG_ERROR("[tagap_script] SPRITE: info limit (%d) "
+                            "reached", GAME_SPRITE_INFO_LIMIT);
+                        goto next_line;
+                    }
+                    ++g_state.l.sprite_info_count;
+                    //LOG_DBUG("added %s to %d", token, spr_global_index);
+
+                    // Get the info and zero it out
+                    info = &g_state.l.sprite_infos[spr_global_index];
+                    memset(info, 0, sizeof(struct tagap_sprite_info));
+                    strcpy(g_state.l.sprite_infos[spr_global_index].name,
+                        token);
+                }
+
+                // And finally copy the info over to the entity
+                spr_entity.info = info;
+                e->sprites[spr_entity_index] = spr_entity;
+                ++e->sprite_count;
             } goto next_line;
 
             // Defines sprite variable for entity sprite
@@ -734,13 +779,12 @@ tagap_script_run(const char *fpath)
                 if (token != NULL)
                 {
                     // 3rd arg: variable value
-                    e->sprite_infos[spr_index].vars[id].value =
-                        (i32)atoi(token);
+                    e->sprites[spr_index].vars[id] = (i32)atoi(token);
                 }
                 else
                 {
                     // Set value to an initial true value for toggled variables
-                    e->sprite_infos[spr_index].vars[id].value = 1;
+                    e->sprites[spr_index].vars[id] = 1;
                 }
             } goto next_line;
 
@@ -756,10 +800,24 @@ tagap_script_run(const char *fpath)
                 // Get current entity
                 struct tagap_entity_info *e = CUR_ENTITY_INFO;
 
-                // Get mode and speed modifier
+                // Get mode, speed modifier, (skip attack reference), and
+                // attack speed
                 e->think.mode = lookup_tagap_think(token);
                 token = TOK_NEXT;
                 e->think.speed_mod = (f32)atof(token);
+                token = TOK_NEXT;
+                // ... skip
+                token = TOK_NEXT;
+                if (token)
+                {
+                    e->think.attack_speed = (f32)atof(token);
+                }
+                else
+                {
+                    LOG_WARN("[tagap_script] THINK: missing attack speed %s:%d",
+                        fpath, line_num);
+                    e->think.attack_speed = 1.0f;
+                }
 
                 // Skip other parameters as we don't care about them right now
             } goto next_line;
@@ -796,13 +854,28 @@ tagap_script_run(const char *fpath)
                 // Get current entity
                 struct tagap_entity_info *e = CUR_ENTITY_INFO;
 
-                // For now we only implement the SIZE offset
-                // (likely will change in future)
-                if (strcmp(token, "SIZE") != 0) goto next_line;
+                // Get offset ID
+                enum tagap_entity_offset_id id = lookup_tagap_offset(token);
+
+                // Read X value
                 token = TOK_NEXT;
-                if (token) { e->colsize.x = (f32)atoi(token); }
+                if (token == NULL)
+                {
+                    LOG_ERROR("[tagap_script] OFFSET: missing X token");
+                    e->offsets[id].x = 0.0f;
+                    goto next_line;
+                }
+                e->offsets[id].x = (f32)atoi(token);
+
+                // Read Y value
                 token = TOK_NEXT;
-                if (token) { e->colsize.y = (f32)atoi(token); }
+                if (token == NULL)
+                {
+                    LOG_WARN("[tagap_script] OFFSET: missing Y token");
+                    e->offsets[id].y = 0.0f;
+                    goto next_line;
+                }
+                e->offsets[id].y = (f32)atoi(token);
             } goto next_line;
 
             // Defines STAT value for entity
@@ -810,7 +883,7 @@ tagap_script_run(const char *fpath)
             {
                 if (cur_parse_mode != TAGAP_PARSE_ENTITY)
                 {
-                    LOG_ERROR("[tagap_script] OFFSET: not on entity");
+                    LOG_ERROR("[tagap_script] STAT: not on entity");
                     goto next_line;
                 }
 

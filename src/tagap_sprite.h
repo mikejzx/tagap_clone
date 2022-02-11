@@ -3,7 +3,6 @@
 
 #include "types.h"
 #include "tagap_anim.h"
-#include "renderer.h"
 
 #define SPRITE_NAME_MAX 32
 
@@ -85,7 +84,26 @@ lookup_tagap_spritevar(const char *v)
     return _SPRITEVAR_UNKNOWN;
 }
 
-struct sprite_info
+struct tagap_sprite_info
+{
+    // Name of the sprite
+    char name[SPRITE_NAME_MAX];
+
+    // Sprite's loaded frames/textures
+    struct tagap_sprite_frame
+    {
+        // Index of the frame's texture in the renderer
+        i32 tex;
+    } *frames;
+
+    union
+    {
+        i32 frame_count;
+        bool is_loaded;
+    };
+};
+
+struct tagap_entity_sprite
 {
     // Full bright flag
     bool bright;
@@ -96,26 +114,14 @@ struct sprite_info
     // Offset from entity
     vec2s offset;
 
-    // Name of sprite
-    char name[SPRITE_NAME_MAX];
+    // SPRITEVAR settings
+    i32 vars[_SPRITEVAR_COUNT];
 
-    // Sprite variables
-    struct tagap_spritevar
-    {
-        i32 value;
-    } vars[_SPRITEVAR_COUNT];
+    // Pointer to the info
+    struct tagap_sprite_info *info;
 };
 
-struct tagap_sprite
-{
-    struct tagap_sprite_frame
-    {
-        // Current index of the texture in the renderer
-        i32 tex_index;
-    } *frames;
-    u32 frame_count;
-
-    struct renderable *r;
-};
+bool tagap_sprite_load(struct tagap_sprite_info *);
+void tagap_sprite_free(struct tagap_sprite_info *);
 
 #endif

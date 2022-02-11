@@ -122,6 +122,7 @@ vulkan_renderer_deinit(void)
 
     // Destroy the global sampler
     vkDestroySampler(g_vulkan->d, g_vulkan->sampler, NULL);
+    if (g_vulkan->image_desc_infos) free(g_vulkan->image_desc_infos);
 
     // Destroy image views and images
     for (u32 i = 0; i < MAX_TEXTURES; ++i)
@@ -1479,6 +1480,12 @@ vulkan_setup_textures(void)
         return -1;
     }
 
+    g_vulkan->sampler_desc_info = (VkDescriptorImageInfo)
+    {
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .sampler = g_vulkan->sampler,
+    };
+
     // Create descriptor sets
     VkDescriptorSetLayout *layouts =
         malloc(swapchain->image_count * sizeof(VkDescriptorSetLayout));
@@ -1790,6 +1797,13 @@ vulkan_texture_create(u8 *pixels, i32 w, i32 h, VkDeviceSize size)
         goto fail;
     }
 
+    // Re-write descriptors if needed
+    if (g_vulkan->in_level)
+    {
+        vulkan_rewrite_descriptors();
+        LOG_DBUG("[vulkan] rewrite texture descriptors");
+    }
+
     return tex_index;
 fail:
     vmaDestroyBuffer(g_vulkan->vma, staging_buf, staging_buf_alloc);
@@ -1840,6 +1854,7 @@ i32
 vulkan_level_begin(void)
 {
     // Free up all the textures (except dummy)
+    g_vulkan->in_level = false;
     for (u32 i = 1; i < g_vulkan->tex_used; ++i)
     {
         vkDestroyImageView(g_vulkan->d, g_vulkan->textures[i].view, NULL);
@@ -1855,14 +1870,19 @@ vulkan_level_begin(void)
 i32
 vulkan_level_end(void)
 {
-    return vulkan_rewrite_descriptors();
+    i32 status = vulkan_rewrite_descriptors();
+    g_vulkan->in_level = true;
+    return status;
 }
 
 static i32
 vulkan_rewrite_descriptors(void)
 {
-    VkDescriptorImageInfo *image_infos =
-        malloc(MAX_TEXTURES * sizeof(VkDescriptorImageInfo));
+    if (!g_vulkan->image_desc_infos)
+    {
+        g_vulkan->image_desc_infos =
+            malloc(MAX_TEXTURES * sizeof(VkDescriptorImageInfo));
+    }
 
     // Set all image infos
     for (u32 i = 0; i < MAX_TEXTURES; ++i)
@@ -1871,7 +1891,7 @@ vulkan_rewrite_descriptors(void)
         i32 index = i;
         if (index >= g_vulkan->tex_used) index = 0;
 
-        image_infos[i] = (VkDescriptorImageInfo)
+        g_vulkan->image_desc_infos[i] = (VkDescriptorImageInfo)
         {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView = g_vulkan->textures[index].view,
@@ -1880,11 +1900,6 @@ vulkan_rewrite_descriptors(void)
     }
 
     // Update descriptor sets
-    const VkDescriptorImageInfo sampler_info =
-    {
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .sampler = g_vulkan->sampler,
-    };
     for (u32 i = 0; i < swapchain->image_count; ++i)
     {
         const VkWriteDescriptorSet set_writes[] =
@@ -1896,7 +1911,7 @@ vulkan_rewrite_descriptors(void)
                 .dstArrayElement = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .descriptorCount = 1,
-                .pImageInfo = &sampler_info,
+                .pImageInfo = &g_vulkan->sampler_desc_info,
             },
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1905,7 +1920,7 @@ vulkan_rewrite_descriptors(void)
                 .dstArrayElement = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = MAX_TEXTURES,
-                .pImageInfo = image_infos,
+                .pImageInfo = g_vulkan->image_desc_infos,
             },
         };
 
@@ -1914,6 +1929,5 @@ vulkan_rewrite_descriptors(void)
             set_writes,
             0, NULL);
     }
-    free(image_infos);
     return 0;
 }

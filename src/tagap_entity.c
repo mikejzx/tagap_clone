@@ -45,60 +45,26 @@ static void check_collision(struct tagap_entity *, struct collision_result *);
 void
 entity_spawn(struct tagap_entity *e)
 {
-    e->velo = (vec2s)GLMS_VEC2_ZERO_INIT;
-    e->inputs.horiz = e->inputs.vert = 0.0f;
-    e->inputs.horiz_smooth = e->inputs.vert_smooth = 0.0f;
-    e->bobbing_timer = 0.0f;
-    e->next_blink = 0;
+    e->active = true;
 
     // Create sprites
-    for (u32 s = 0; s < e->info->sprite_info_count; ++s)
+    for (u32 s = 0; s < e->info->sprite_count; ++s)
     {
-        struct tagap_sprite *spr = &e->sprites[s];
-        struct sprite_info *sprinfo = &e->info->sprite_infos[s];
+        const struct tagap_entity_sprite *spr = &e->info->sprites[s];
 
-        // TODO: reuse sprites
-
-        // Count sprite frame textures
-        char sprpath[128];
-        spr->frame_count = -1;
-        do
+        // Load the sprites into the sprite info
+        if (!tagap_sprite_load(spr->info))
         {
-            ++spr->frame_count;
-            sprintf(sprpath, "%s/%s_%02d.tga",
-                TAGAP_SPRITES_DIR,
-                sprinfo->name,
-                spr->frame_count);
-        } while(access(sprpath, F_OK) == 0);
-
-        // Allocate frames
-        spr->frames = calloc(spr->frame_count,
-            sizeof(struct tagap_sprite_frame));
-
-        // Load each of the individual frames textures
-        for (u32 f = 0; f < spr->frame_count; ++f)
-        {
-            sprintf(sprpath, "%s/%s_%02d.tga",
-                TAGAP_SPRITES_DIR,
-                sprinfo->name,
-                f);
-            spr->frames[f].tex_index = vulkan_texture_load(sprpath);
-            if (spr->frames[f].tex_index < 0)
-            {
-                LOG_WARN("[entity] sprite texture '%s' couldn't be loaded",
-                    sprpath);
-                spr->frames[f].tex_index = 0;
-            }
+            continue;
         }
 
         // Create the sprite renderable
-        spr->r = renderer_get_renderable();
+        e->sprites[s] = renderer_get_renderable();
+        struct renderable *r = e->sprites[s];
 
         // Create quad for the sprite
-        //f32 w = (f32)g_vulkan->textures[spr->frames[0].tex_index].w / 2.0f,
-        //    h = (f32)g_vulkan->textures[spr->frames[0].tex_index].h / 2.0f;
-        f32 w = 0.5f, h = 0.5f;
-        const struct vertex vertices[4] =
+        static const f32 w = 0.5f, h = 0.5f;
+        static const struct vertex vertices[4] =
         {
             // Top left
             {
@@ -121,36 +87,134 @@ entity_spawn(struct tagap_entity *e)
                 .texcoord = (vec2s) { 0.0f, 1.0f, },
             },
         };
-        const u16 indices[3 * 4] =
+        static const u16 indices[3 * 4] =
         {
             0, 1, 2,
             0, 2, 3
         };
 
-        vb_new(&spr->r->vb, vertices, 4 * sizeof(struct vertex));
-        ib_new(&spr->r->ib, indices, 3 * 4 * sizeof(u16));
-        spr->r->tex = spr->frames[0].tex_index;
-        spr->r->pos = e->position;
-        spr->r->offset = sprinfo->offset;
-        spr->r->pos.y *= -1.0f;
-        if (e->info->think.mode == THINK_AI_AIM)
+        // Copy vertex/index data into sprite renderable
+        vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
+        ib_new(&r->ib, indices, 3 * 4 * sizeof(u16));
+        r->tex = spr->info->frames[0].tex;
+        r->pos = e->position;
+        r->offset = spr->offset;
+        r->pos.y *= -1.0f;
+        if (e->info->think.mode == THINK_AI_AIM ||
+            spr->vars[SPRITEVAR_AIM])
         {
-            spr->r->rot = e->aim_angle;
-            spr->r->flipped = false;
+            r->rot = e->aim_angle;
+            r->flipped = false;
         }
         else
         {
-            spr->r->rot = 0;
-            spr->r->flipped = !!e->facing;
+            r->rot = 0;
+            r->flipped = !!e->facing;
         }
-        // We want the renderer to do the scaling for us
-        spr->r->tex_scale = true;
+        // We want the renderer to do the scaling for us on sprites
+        r->tex_scale = true;
 
-        // Don't waste CPU cycles doing culling calculations on player sprites
         if (e->info->think.mode == THINK_AI_USER)
         {
-            spr->r->no_cull = true;
+            // Don't waste CPU cycles doing culling calculations on player
+            // sprites
+            r->no_cull = true;
         }
+    }
+
+    if (e->info->think.mode == THINK_AI_USER)
+    {
+        e->info->stats[STAT_S_WEAPON] = 2;
+    }
+}
+
+static void
+entity_reset(
+    struct tagap_entity *e,
+    vec2s pos,
+    f32 aim,
+    bool flipped)
+{
+    e->active = true;
+    e->position = pos;
+    e->aim_angle = aim;
+    e->flipped = flipped;
+    for (u32 i = 0; i < e->info->sprite_count; ++i)
+    {
+        e->sprites[i]->hidden = false;
+    }
+
+    // Reset timers
+    e->bobbing_timer = 0.0f;
+    e->bobbing_timer_last = 0.0f;
+    e->jump_timer = 0.0f;
+    e->jump_reset = false;
+    e->next_blink = 0;
+    e->blink_timer = 0;
+    e->timer_tempmissile = 0.0f;
+    e->attack_timer = 0.0f;
+}
+
+void
+entity_spawn_missile(
+    struct tagap_entity *owner,
+    struct tagap_entity_info *missile)
+{
+    vec2s spawn_pos = missile->offsets[OFFSET_WEAPON_MISSILE];
+    spawn_pos.x *= (owner->flipped ? -1.0f : 1.0f);
+    spawn_pos = glms_vec2_add(owner->position, spawn_pos);
+
+    // Check if we have any pooled entities which are the correct type
+    struct tagap_entity *missile_e = NULL;
+    for (u32 i = 0; i < owner->pool_count; ++i)
+    {
+        if (owner->pool[i].mark == owner->info->stats[STAT_S_WEAPON] &&
+            !owner->pool[i].e->active)
+        {
+            missile_e = owner->pool[i].e;
+            entity_reset(missile_e,
+                spawn_pos,
+                owner->aim_angle,
+                owner->flipped);
+            break;
+        }
+    }
+    if (!missile_e)
+    {
+        // Nothing in the pool that matches, so just spawn an new entity
+        missile_e = state_level_spawn_entity(missile,
+            spawn_pos,
+            owner->aim_angle,
+            owner->flipped);
+        if (missile_e)
+        {
+            missile_e->owner = owner;
+        }
+    }
+}
+
+void
+entity_die(struct tagap_entity *e)
+{
+    // Die effects (e.g. explosion, etc.)
+    // ...
+
+    // Move the entity to the missile pool and mark it with owner's weapon slot
+    e->active = false;
+    for (u32 i = 0; i < e->info->sprite_count; ++i)
+    {
+        e->sprites[i]->hidden = true;
+    }
+    if (!e->pooled && e->owner)
+    {
+        // Add to owner pool
+        e->owner->pool[e->owner->pool_count++] = (struct pooled_entity)
+        {
+            // This is a bit dodgey, but it works for now I guess.  We use the
+            // weapon slot as the marker
+            .mark = e->owner->info->stats[STAT_S_WEAPON],
+            .e = e,
+        };
     }
 }
 
@@ -198,12 +262,44 @@ entity_update(struct tagap_entity *e)
         if (keystate[SDL_SCANCODE_S]) e->inputs.vert = -1.0f;
         else if (keystate[SDL_SCANCODE_W]) e->inputs.vert = 1.0f;
         else e->inputs.vert = 0.0f;
+
+        // Temporary: TODO fire on mouse click
+        e->inputs.fire = keystate[SDL_SCANCODE_F];
+    } break;
+
+    case THINK_AI_MISSILE:
+    {
+        e->position.x +=
+            cos(glm_rad(e->aim_angle)) *
+            (DT * 60.0f * e->info->think.speed_mod) *
+            (e->flipped ? -1.0f : 1.0f);
+        e->position.y +=
+            sin(glm_rad(e->aim_angle)) *
+            (DT * 60.0f * e->info->think.speed_mod);
+
+        f32 missile_lifespan = e->info->stats[STAT_TEMPMISSILE] / 1000.0f;
+        if (missile_lifespan <= 0.0f) missile_lifespan = 2.0f;
+        if (e->timer_tempmissile >= missile_lifespan)
+        {
+            entity_die(e);
+        }
+        e->timer_tempmissile += DT;
     } break;
 
     // Static entity
     default:
     case THINK_NONE: break;
     }
+
+    // Weapons
+    struct tagap_entity_info *missile_info =
+        g_state.l.weapons[e->info->stats[STAT_S_WEAPON]].primary;
+    if (e->inputs.fire && e->attack_timer > missile_info->think.attack_speed)
+    {
+        entity_spawn_missile(e, missile_info);
+        e->attack_timer = 0.0f;
+    }
+    e->attack_timer += DT;
 
     // Collision info
     struct collision_result collision;
@@ -242,7 +338,11 @@ entity_update(struct tagap_entity *e)
         {
             // Stop timer so that gravity kicks in
             e->jump_timer = -1.0f;
-            e->jump_reset = true;
+
+            if (collision.below)
+            {
+                e->jump_reset = true;
+            }
         }
         if (e->jump_timer >= 0.0f)
         {
@@ -298,7 +398,7 @@ entity_update(struct tagap_entity *e)
             e->position.x += e->velo.x * DT * 60.0f;
             e->position.y =
                 collision.floor_gradient * e->position.x +
-                collision.floor_shift + e->info->colsize.x;
+                collision.floor_shift + e->info->offsets[OFFSET_SIZE].x;
         }
         else
         {
@@ -372,48 +472,48 @@ entity_update(struct tagap_entity *e)
     // TODO: only enable bobbing if entity during load detects that sprites
     // need bobbing
     f32 bob_sin = 0.0f;
-    if (e->info->sprite_info_count)
+    if (e->info->sprite_count)
     {
         bob_sin = sinf(e->bobbing_timer);
     }
 
     // Update sprites
-    for (u32 s = 0; s < e->info->sprite_info_count; ++s)
+    for (u32 s = 0; s < e->info->sprite_count; ++s)
     {
-        struct tagap_sprite *spr = &e->sprites[s];
-        struct sprite_info *sprinfo = &e->info->sprite_infos[s];
+        struct tagap_entity_sprite *spr = &e->info->sprites[s];
+        struct renderable *spr_r = e->sprites[s];
 
         // SPRITEVAR animations/bobbing effects
         vec2s sprite_offset = (vec2s)GLMS_VEC2_ZERO_INIT;
         f32 sprite_rot_offset = 0.0f;
-        if (sprinfo->vars[SPRITEVAR_BOB].value && e->velo.x != 0.0f)
+        if (spr->vars[SPRITEVAR_BOB] && e->velo.x != 0.0f)
         {
             // Bobbing animation
-            f32 bob_var = (f32)sprinfo->vars[SPRITEVAR_BOB].value;
+            f32 bob_var = (f32)spr->vars[SPRITEVAR_BOB];
             sprite_offset.y =
                 e->velo.x *
                 bob_sin * bob_var / 25.0f;
         }
-        else if (sprinfo->vars[SPRITEVAR_BIAS].value)
+        else if (spr->vars[SPRITEVAR_BIAS])
         {
             if (e->velo.x != 0.0f)
             {
                 // Set to the second frame
-                if (spr->frame_count > 0)
+                if (spr->info->frame_count > 0)
                 {
                     // Not sure if this is a good idea; however something like
                     // this is needed for leg animations to work properly.
-                    spr->r->tex = spr->frames[1].tex_index;
+                    spr_r->tex = spr->info->frames[1].tex;
                 }
 
                 // Apply rotation offset
                 sprite_rot_offset = bob_sin *
-                    (f32)sprinfo->vars[SPRITEVAR_BIAS].value / 2.0f;
+                    (f32)spr->vars[SPRITEVAR_BIAS] / 2.0f;
             }
             else
             {
                 // Set legs to first frame
-                spr->r->tex = spr->frames[0].tex_index;
+                spr_r->tex = spr->info->frames[0].tex;
 
                 // Set angle to the linedef tangent
                 sprite_rot_offset = glm_deg(atan(collision.floor_gradient));
@@ -425,51 +525,51 @@ entity_update(struct tagap_entity *e)
         }
 
         // By default use entity position and normal rotation
-        spr->r->pos = glms_vec2_add(e->position, sprite_offset);
-        spr->r->pos.y *= -1.0f;
-        spr->r->rot = entity_get_rot(e) + sprite_rot_offset;
+        spr_r->pos = glms_vec2_add(e->position, sprite_offset);
+        spr_r->pos.y *= -1.0f;
+        spr_r->rot = entity_get_rot(e) + sprite_rot_offset;
 
         // Flip sprites based on entity facing
-        spr->r->flipped = e->flipped;
+        spr_r->flipped = e->flipped;
 
         // Update sprite positions
-        switch(sprinfo->anim)
+        switch(spr->anim)
         {
         case ANIM_WEAPON2:
         {
             // Hide second weapon sprite if entity does not have akimbo
-            spr->r->hidden = !e->info->stats[STAT_S_AKIMBO];
+            spr_r->hidden = !e->info->stats[STAT_S_AKIMBO];
         }
         // ... falls through
         case ANIM_WEAPON:
         {
-            spr->r->rot = e->aim_angle;
+            spr_r->rot = e->aim_angle;
 
             // Use akimbo texture frame on uzi (slot 0) if we have it
-            u32 weapon_slot = 4; //e->info->stats[STAT_S_WEAPON];
+            u32 weapon_slot = e->info->stats[STAT_S_WEAPON];
             u32 tex_slot = weapon_slot + 2;
             if (weapon_slot == 0 &&
                 e->info->stats[STAT_S_AKIMBO])
             {
                 tex_slot = 0;
             }
-            if (tex_slot < spr->frame_count)
+            if (tex_slot < spr->info->frame_count)
             {
-                spr->r->tex = spr->frames[tex_slot].tex_index;
+                spr_r->tex = spr->info->frames[tex_slot].tex;
             }
             else
             {
-                spr->r->tex = spr->frames[0].tex_index;
-                spr->r->hidden = true;
+                spr_r->tex = spr->info->frames[0].tex;
+                spr_r->hidden = true;
             }
         } break;
 
         // Head animation
         case ANIM_FACE:
         {
-            if (spr->r->rot  < 90.0f)
+            if (spr_r->rot  < 90.0f)
             {
-                spr->r->rot = 30.0f * (e->aim_angle / 90.0f);
+                spr_r->rot = 30.0f * (e->aim_angle / 90.0f);
             }
 
             // Blink animation
@@ -481,11 +581,11 @@ entity_update(struct tagap_entity *e)
             }
             if (e->blink_timer < 0.2f)
             {
-                spr->r->tex = spr->frames[1].tex_index;
+                spr_r->tex = spr->info->frames[1].tex;
             }
             else
             {
-                spr->r->tex = spr->frames[0].tex_index;
+                spr_r->tex = spr->info->frames[0].tex;
             }
             e->blink_timer += DT;
         } break;
@@ -500,10 +600,9 @@ entity_update(struct tagap_entity *e)
 void
 entity_free(struct tagap_entity *e)
 {
-    for (u32 s = 0; s < e->info->sprite_info_count; ++s)
+    for (u32 s = 0; s < e->info->sprite_count; ++s)
     {
-        struct tagap_sprite *spr = &e->sprites[s];
-        free(spr->frames);
+        tagap_sprite_free(e->info->sprites[s].info);
     }
 }
 
@@ -552,7 +651,7 @@ check_collision(
             if ((l->style == LINEDEF_STYLE_FLOOR ||
                     l->style == LINEDEF_STYLE_PLATE_FLOOR) &&
                 !c->below &&
-                e->position.y - e->info->colsize.x <= y_line &&
+                e->position.y - e->info->offsets[OFFSET_SIZE].x <= y_line &&
                 e->position.y >= y_line)
             {
                 c->below = true;

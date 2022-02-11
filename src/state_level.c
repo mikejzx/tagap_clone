@@ -23,6 +23,9 @@ state_level_init(void)
     g_map->polygon_count = 0;
     g_map->entities = malloc(LEVEL_MAX_ENTITIES * sizeof(struct tagap_entity));
     g_map->entity_count = 0;
+    g_map->tmp_entities =
+        malloc(LEVEL_MAX_TMP_ENTITIES * sizeof(struct tagap_entity));
+    g_map->tmp_entity_count = 0;
 
     g_state.l.entity_infos =
         malloc(GAME_ENTITY_INFO_LIMIT * sizeof(struct tagap_entity_info));
@@ -31,6 +34,10 @@ state_level_init(void)
     g_state.l.theme_infos =
         calloc(GAME_THEME_INFO_LIMIT, sizeof(struct tagap_theme_info));
     g_state.l.theme_info_count = 1;
+
+    g_state.l.sprite_infos =
+        malloc(GAME_SPRITE_INFO_LIMIT * sizeof(struct tagap_sprite_info));
+    g_state.l.sprite_info_count = 0;
 
     g_map->theme = &g_state.l.theme_infos[0];
 }
@@ -43,12 +50,17 @@ state_level_reset(void)
     {
         entity_free(&g_map->entities[i]);
     }
+    for (u32 i = 0; i < g_map->tmp_entity_count; ++i)
+    {
+        entity_free(&g_map->tmp_entities[i]);
+    }
 
     // Clear out all current data
     g_map->title[0] = g_map->desc[0] = '\0';
     g_map->linedef_count = 0;
     g_map->polygon_count = 0;
     g_map->entity_count = 0;
+    g_map->tmp_entity_count = 0;
 
     // Need to set this to zero to reset polygon point counters
     memset(g_map->polygons, 0,
@@ -64,6 +76,7 @@ state_level_deinit(void)
     free(g_map->entities);
     free(g_state.l.entity_infos);
     free(g_state.l.theme_infos);
+    free(g_state.l.sprite_infos);
 }
 
 /*
@@ -84,7 +97,7 @@ state_level_submit_to_renderer(void)
 }
 
 /*
- * Spawn all entities in the level
+ * Spawn all initial entities in the level
  */
 void
 state_level_spawn_entities()
@@ -105,4 +118,41 @@ state_level_update()
     {
         entity_update(&g_map->entities[i]);
     }
+    for (u32 i = 0; i < LEVEL_MAX_TMP_ENTITIES; ++i)
+    {
+        if (!g_map->tmp_entities[i].active) continue;
+
+        entity_update(&g_map->tmp_entities[i]);
+    }
+}
+
+/*
+ * Spawn a temporary entity in the level
+ */
+struct tagap_entity *
+state_level_spawn_entity(
+    struct tagap_entity_info *ei,
+    vec2s position,
+    f32 aim_angle,
+    bool flipped)
+{
+    if (g_map->tmp_entity_count + 1 >= LEVEL_MAX_TMP_ENTITIES)
+    {
+        // No entity slots left
+        LOG_WARN("[state_level] cannot spawn temporary entity; "
+            "limit (%d) reached ", LEVEL_MAX_TMP_ENTITIES);
+        return NULL;
+    }
+    struct tagap_entity *e = &g_map->tmp_entities[g_map->tmp_entity_count++];
+
+    memset(e, 0, sizeof(struct tagap_entity));
+    e->info = ei;
+    e->position = position;
+    e->aim_angle = aim_angle;
+    e->flipped = flipped;
+
+    // Actually spawn it in
+    ++g_map->tmp_entity_count;
+    entity_spawn(e);
+    return e;
 }
