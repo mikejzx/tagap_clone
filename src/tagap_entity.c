@@ -126,6 +126,32 @@ entity_spawn(struct tagap_entity *e)
     {
         e->info->stats[STAT_S_WEAPON] = 2;
     }
+
+    // Spawn the gun entity
+    struct tagap_entity_info *missile_info =
+        g_state.l.weapons[e->info->stats[STAT_S_WEAPON]].primary;
+    if (missile_info->gun_entity)
+    {
+        // TODO move to the level state file
+        // TODO bounds check
+        if (g_map->entity_count + 1 >= LEVEL_MAX_ENTITIES)
+        {
+            LOG_ERROR("[tagap_entity] level entity limit (%d) exceeded",
+                LEVEL_MAX_ENTITIES);
+            return;
+        }
+        struct tagap_entity *gunent = &g_map->entities[g_map->entity_count++];
+        memset(gunent, 0, sizeof(struct tagap_entity));
+        gunent->info = missile_info->gun_entity;
+        gunent->position = e->position;
+        gunent->aim_angle = e->aim_angle;
+        gunent->flipped = e->flipped;
+        gunent->owner = e;
+        gunent->with_owner = true;
+
+        // Don't need to call entity_spawn as we are in a loop which calls it
+        // for us (in state_level)
+    }
 }
 
 static void
@@ -253,30 +279,31 @@ entity_update(struct tagap_entity *e)
         e->aim_angle = -ang * (e->flipped ? -1 : 1);
 
         // Set inputs to player input
-        const u8 *keystate = SDL_GetKeyboardState(NULL);
-
-        if (keystate[SDL_SCANCODE_A]) e->inputs.horiz = -1.0f;
-        else if (keystate[SDL_SCANCODE_D]) e->inputs.horiz = 1.0f;
+        if (g_state.kb_state[SDL_SCANCODE_A]) e->inputs.horiz = -1.0f;
+        else if (g_state.kb_state[SDL_SCANCODE_D]) e->inputs.horiz = 1.0f;
         else e->inputs.horiz = 0.0f;
 
-        if (keystate[SDL_SCANCODE_S]) e->inputs.vert = -1.0f;
-        else if (keystate[SDL_SCANCODE_W]) e->inputs.vert = 1.0f;
+        if (g_state.kb_state[SDL_SCANCODE_S]) e->inputs.vert = -1.0f;
+        else if (g_state.kb_state[SDL_SCANCODE_W]) e->inputs.vert = 1.0f;
         else e->inputs.vert = 0.0f;
 
-        // Temporary: TODO fire on mouse click
-        e->inputs.fire = keystate[SDL_SCANCODE_F];
+        e->inputs.fire = !!(g_state.m_state & SDL_BUTTON(1));
     } break;
 
     case THINK_AI_MISSILE:
     {
-        e->position.x +=
-            cos(glm_rad(e->aim_angle)) *
-            (DT * 60.0f * e->info->think.speed_mod) *
-            (e->flipped ? -1.0f : 1.0f);
-        e->position.y +=
-            sin(glm_rad(e->aim_angle)) *
-            (DT * 60.0f * e->info->think.speed_mod);
+        // Fixes gunentity glitches
+        if (e->owner && e->with_owner)
+        {
+            break;
+        }
 
+        // Missile velocity
+        e->velo.x = cos(glm_rad(e->aim_angle)) * e->info->think.speed_mod *
+            (e->flipped ? -1.0f : 1.0f);
+        e->velo.y = sin(glm_rad(e->aim_angle)) * e->info->think.speed_mod;
+
+        // Missile lifespan
         f32 missile_lifespan = e->info->stats[STAT_TEMPMISSILE] / 1000.0f;
         if (missile_lifespan <= 0.0f) missile_lifespan = 2.0f;
         if (e->timer_tempmissile >= missile_lifespan)
@@ -311,7 +338,16 @@ entity_update(struct tagap_entity *e)
     // Static entity
     case MOVETYPE_NONE:
     default:
-        break;
+    {
+        if (!glms_vec2_eq(e->velo, 0.0f))
+        {
+            check_collision(e, &collision);
+
+            // Just apply velocity if we have any
+            e->position.x += e->velo.x * DT * 60.0f;
+            e->position.y += e->velo.y * DT * 60.0f;
+        }
+    } break;
 
     // Entity is affected by gravity (i.e. walks the earth)
     case MOVETYPE_WALK:
@@ -421,17 +457,28 @@ entity_update(struct tagap_entity *e)
             // timer as such to get there
             if (e->bobbing_timer > GLM_PI_2)
             {
-                // Send bob timer backwards to get to 90 degrees
-                e->bobbing_timer = clamp(
-                    e->bobbing_timer - DT * 20.0f,
-                    GLM_PI_2,
-                    2.0f * GLM_PI);
+                if (e->bobbing_timer > GLM_PI)
+                {
+                    // Send bob timer forwards to get to 90 degrees
+                    e->bobbing_timer = clamp(
+                        e->bobbing_timer + DT * 10.0f,
+                        GLM_PI_2,
+                        GLM_PI_2 + GLM_PI * 2.0f);
+                }
+                else
+                {
+                    // Send bob timer backwards to get to 90 degrees
+                    e->bobbing_timer = clamp(
+                        e->bobbing_timer - DT * 10.0f,
+                        GLM_PI_2,
+                        GLM_PI * 2.0f);
+                }
             }
             else if (e->bobbing_timer < GLM_PI_2)
             {
                 // Send bob timer forwards to get to 90 degrees
                 e->bobbing_timer = clamp(
-                    e->bobbing_timer + DT * 20.0f,
+                    e->bobbing_timer + DT * 10.0f,
                     0.0f,
                     GLM_PI_2);
             }
@@ -458,7 +505,10 @@ entity_update(struct tagap_entity *e)
     } break;
     }
 
-    if (e->info->think.mode == THINK_AI_USER)
+    // Post-movement/collision think stuff
+    switch(e->info->think.mode)
+    {
+    case THINK_AI_USER:
     {
         // This is the player; update camera position
         g_state.cam_pos = (vec3s)
@@ -467,6 +517,30 @@ entity_update(struct tagap_entity *e)
              -e->position.y - (f32)HEIGHT / 2 - 100.0f,
              0.0f
         }};
+    } break;
+
+    case THINK_AI_MISSILE:
+    {
+        // If the missile collides with something then destroy it
+        // TODO: check AI_BLOW
+        if (collision.above ||
+            collision.left ||
+            collision.right ||
+            collision.below)
+        {
+            entity_die(e);
+        }
+    } break;
+
+    default: break;
+    }
+
+    // Gun entities
+    if (e->with_owner && e->owner)
+    {
+        e->position = e->owner->position;
+        e->aim_angle  = e->owner->aim_angle;
+        e->flipped  = e->owner->flipped;
     }
 
     // TODO: only enable bobbing if entity during load detects that sprites
@@ -474,7 +548,15 @@ entity_update(struct tagap_entity *e)
     f32 bob_sin = 0.0f;
     if (e->info->sprite_count)
     {
-        bob_sin = sinf(e->bobbing_timer);
+        if (e->owner && e->with_owner)
+        {
+            // Child entities use same bobbing timer as owner
+            bob_sin = sinf(e->owner->bobbing_timer);
+        }
+        else
+        {
+            bob_sin = sinf(e->bobbing_timer);
+        }
     }
 
     // Update sprites
@@ -486,12 +568,14 @@ entity_update(struct tagap_entity *e)
         // SPRITEVAR animations/bobbing effects
         vec2s sprite_offset = (vec2s)GLMS_VEC2_ZERO_INIT;
         f32 sprite_rot_offset = 0.0f;
-        if (spr->vars[SPRITEVAR_BOB] && e->velo.x != 0.0f)
+        f32 bob_mul = e->velo.x;
+        if (e->owner && e->with_owner) bob_mul = e->owner->velo.x;
+        if (spr->vars[SPRITEVAR_BOB] && bob_mul != 0.0f)
         {
             // Bobbing animation
             f32 bob_var = (f32)spr->vars[SPRITEVAR_BOB];
             sprite_offset.y =
-                e->velo.x *
+                bob_mul *
                 bob_sin * bob_var / 25.0f;
         }
         else if (spr->vars[SPRITEVAR_BIAS])
@@ -545,22 +629,31 @@ entity_update(struct tagap_entity *e)
         {
             spr_r->rot = e->aim_angle;
 
-            // Use akimbo texture frame on uzi (slot 0) if we have it
-            u32 weapon_slot = e->info->stats[STAT_S_WEAPON];
-            u32 tex_slot = weapon_slot + 2;
-            if (weapon_slot == 0 &&
-                e->info->stats[STAT_S_AKIMBO])
+            if (!e->owner)
             {
-                tex_slot = 0;
-            }
-            if (tex_slot < spr->info->frame_count)
-            {
-                spr_r->tex = spr->info->frames[tex_slot].tex;
+                // Use akimbo texture frame on uzi (slot 0) if we have it
+                u32 weapon_slot = e->info->stats[STAT_S_WEAPON];
+                u32 tex_slot = weapon_slot + 2;
+                if (weapon_slot == 0 &&
+                    e->info->stats[STAT_S_AKIMBO])
+                {
+                    tex_slot = 0;
+                }
+                if (tex_slot < spr->info->frame_count)
+                {
+                    spr_r->tex = spr->info->frames[tex_slot].tex;
+                }
+                else
+                {
+                    spr_r->tex = spr->info->frames[0].tex;
+                    spr_r->hidden = true;
+                }
             }
             else
             {
+                // Gun entity
                 spr_r->tex = spr->info->frames[0].tex;
-                spr_r->hidden = true;
+                spr_r->hidden = false;
             }
         } break;
 
@@ -579,7 +672,7 @@ entity_update(struct tagap_entity *e)
                     ((rand() % 4000) + 600) * NS_PER_MS;
                 e->blink_timer = 0.0f;
             }
-            if (e->blink_timer < 0.2f)
+            if (e->blink_timer < 0.15f)
             {
                 spr_r->tex = spr->info->frames[1].tex;
             }
@@ -651,6 +744,7 @@ check_collision(
             if ((l->style == LINEDEF_STYLE_FLOOR ||
                     l->style == LINEDEF_STYLE_PLATE_FLOOR) &&
                 !c->below &&
+                e->velo.y <= 0.0f &&
                 e->position.y - e->info->offsets[OFFSET_SIZE].x <= y_line &&
                 e->position.y >= y_line)
             {

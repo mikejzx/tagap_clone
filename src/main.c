@@ -109,7 +109,8 @@ main (i32 argc, char **argv)
         g_state.cam_pos = glms_vec3_add(g_state.cam_pos, cam_add);
 
         // Get inputs
-        SDL_GetMouseState(&g_state.mouse_x, &g_state.mouse_y);
+        g_state.kb_state = SDL_GetKeyboardState(NULL);
+        g_state.m_state = SDL_GetMouseState(&g_state.mouse_x, &g_state.mouse_y);
 
         // Main state machine loop
         switch (g_state.type)

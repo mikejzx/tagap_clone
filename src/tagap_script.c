@@ -68,6 +68,10 @@ enum atom_id
     // End of entity definition
     ATOM_ENTITY_END,
 
+    // Set entity as as the entity's weapon model
+    // STR: name of entity to use as gun entity
+    ATOM_GUNENTITY,
+
     // Clones all info of existing entity
     // STR: name of entity to clone
     ATOM_CLONE,
@@ -145,6 +149,7 @@ static const char *ATOM_NAMES[] =
     [ATOM_ENTITY_SET]   = "ENTITY_SET",
     [ATOM_ENTITY_START] = "ENTITY_START",
     [ATOM_ENTITY_END]   = "ENTITY_END",
+    [ATOM_GUNENTITY]    = "GUNENTITY",
     [ATOM_CLONE]        = "CLONE",
     [ATOM_SPRITE]       = "SPRITE",
     [ATOM_SPRITEVAR]    = "SPRITEVAR",
@@ -596,8 +601,8 @@ tagap_script_run(const char *fpath)
                         "no entity with name '%s'", token);
                     goto next_line;
                 }
-                //LOG_DBUG("[tagap_script] adding entity (%s)", token);
 
+                // Add entity to entity list
                 struct tagap_entity e;
                 memset(&e, 0, sizeof(struct tagap_entity));
                 e.info = ei;
@@ -621,6 +626,37 @@ tagap_script_run(const char *fpath)
                 lvl->entities[lvl->entity_count++] = e;
             } goto next_line;
 
+            // Weapon entity
+            case ATOM_GUNENTITY:
+            {
+                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
+                {
+                    LOG_ERROR("[tagap_script] GUNENTITY: not on entity");
+                    goto next_line;
+                }
+
+                // TODO: put this into a function
+                struct tagap_entity_info *gunent = NULL;
+                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
+                {
+                    // Find the entity with specified name
+                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
+                        continue;
+
+                    gunent = &g_state.l.entity_infos[i];
+                    break;
+                }
+                if (!gunent)
+                {
+                    LOG_WARN("[tagap_script] GUNENTITY: "
+                        "no entity with name '%s'", token);
+                    goto next_line;
+                }
+
+                struct tagap_entity_info *e = CUR_ENTITY_INFO;
+                e->gun_entity = gunent;
+            } goto next_line;
+
             // Copy entity info
             case ATOM_CLONE:
             {
@@ -630,6 +666,7 @@ tagap_script_run(const char *fpath)
                     goto next_line;
                 }
 
+                // TODO: put this into a function
                 struct tagap_entity_info *to_copy = NULL;
                 for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
                 {

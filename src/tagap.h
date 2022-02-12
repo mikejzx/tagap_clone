@@ -35,18 +35,14 @@ struct tagap
     enum game_state type;
 
     // Current state info
-    struct
-    {
-        struct state_menu m;
-        struct state_level l;
-    };
+    struct state_menu m;
+    struct state_level l;
 
     // Current client-side input/state info
-    struct
-    {
-        vec3s cam_pos;
-        i32 mouse_x, mouse_y;
-    };
+    vec3s cam_pos;
+    i32 mouse_x, mouse_y;
+    u8 m_state;
+    const u8 *kb_state;
 
     // Renderer
     struct vulkan_renderer vulkan;

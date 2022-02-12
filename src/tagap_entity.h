@@ -215,6 +215,9 @@ struct tagap_entity_info
     // It seems like X-value is only useful one here for some reason
     // Set with OFFSET SIZE command (will implement other OFFSETs in future)
     vec2s offsets[ENTITY_OFFSET_COUNT];
+
+    // GUNENTITY for weapon entity
+    struct tagap_entity_info *gun_entity;
 };
 
 // Copy info from @b to @a
@@ -242,6 +245,7 @@ struct tagap_entity
 
     // Entity that 'owns' this one (e.g. missile owned by player who fired it)
     struct tagap_entity *owner;
+    bool with_owner;
 
     // Whether this entity is active or not
     bool active;
