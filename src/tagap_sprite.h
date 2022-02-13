@@ -70,19 +70,7 @@ static const char *SPRITEVAR_NAMES[] =
     [SPRITEVAR_SCALE]       = "SCALE",
 };
 
-static inline enum tagap_spritevar_id
-lookup_tagap_spritevar(const char *v)
-{
-    for (u32 i = 0; i < _SPRITEVAR_COUNT; ++i)
-    {
-        if (strcmp(v, SPRITEVAR_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    LOG_WARN("[tagap_think] lookup of SPRITEVAR '%s' yields nothing", v);
-    return _SPRITEVAR_UNKNOWN;
-}
+CREATE_LOOKUP_FUNC(lookup_tagap_spritevar, SPRITEVAR_NAMES, _SPRITEVAR_COUNT);
 
 struct tagap_sprite_info
 {
@@ -105,6 +93,9 @@ struct tagap_sprite_info
 
 struct tagap_entity_sprite
 {
+    // Pointer to the info
+    struct tagap_sprite_info *info;
+
     // Full bright flag
     bool bright;
 
@@ -116,9 +107,6 @@ struct tagap_entity_sprite
 
     // SPRITEVAR settings
     i32 vars[_SPRITEVAR_COUNT];
-
-    // Pointer to the info
-    struct tagap_sprite_info *info;
 };
 
 bool tagap_sprite_load(struct tagap_sprite_info *);

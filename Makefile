@@ -40,12 +40,12 @@ run: all
 	$(ENV_VARS) ./$(OUT)
 
 # Run with GDB debugger
-debug: $(OUT)
+debug:
 	$(ENV_VARS) gdb $(OUT)
 
 # Link the main executable
 $(OUT): $(OBJS)
-	@echo "== linking ..."
+	@echo "\033[00;33m== linking ...\033[00m"
 	g++ $(LIB_VMA) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 # Include generated dependencies
@@ -53,7 +53,9 @@ $(OUT): $(OBJS)
 
 # Compile objects with dependencies
 bin/$(MODE)/%.o: src/%.c Makefile
+	@echo -n "\033[00;36m"
 	gcc -MMD -MP -c $< -o $@ $(CFLAGS) $(LDFLAGS)
+	@echo -n "\033[00m"
 
 # Make directories we need for build
 $(DIRS):
@@ -61,9 +63,11 @@ $(DIRS):
 
 # Clean binaries
 clean:
+	@echo -n "\033[00;36m"
 	rm -f $(shell find bin -type f)
+	@echo -n "\033[00m"
 
 # Compile SPIR-V shaders
 shaders:
-	@echo "== compiling shaders ..."
+	@echo "\033[00;33m== compiling shaders ...\033[00m"
 	@cd shader && make

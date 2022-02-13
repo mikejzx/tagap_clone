@@ -8,12 +8,14 @@
 #include "renderer.h"
 
 struct level *g_map;
+struct state_level *g_level;
 
 void
-state_level_init(void)
+level_init(void)
 {
     LOG_INFO("[state] level init");
 
+    g_level = &g_state.l;
     g_map = &g_state.l.map;
 
     // Allocate memory
@@ -43,7 +45,7 @@ state_level_init(void)
 }
 
 void
-state_level_reset(void)
+level_reset(void)
 {
     // Cleanup entities
     for (u32 i = 0; i < g_map->entity_count; ++i)
@@ -68,7 +70,7 @@ state_level_reset(void)
 }
 
 void
-state_level_deinit(void)
+level_deinit(void)
 {
     LOG_INFO("[state] level cleanup");
     free(g_map->linedefs);
@@ -83,7 +85,7 @@ state_level_deinit(void)
  * Add polygons, linedefs, etc. to the renderer
  */
 void
-state_level_submit_to_renderer(void)
+level_submit_to_renderer(void)
 {
     // Polygons are rendered first so add them to the renderables list first
     i32 i;
@@ -100,7 +102,7 @@ state_level_submit_to_renderer(void)
  * Spawn all initial entities in the level
  */
 void
-state_level_spawn_entities()
+level_spawn_entities()
 {
     for (u32 i = 0; i < g_map->entity_count; ++i)
     {
@@ -112,7 +114,7 @@ state_level_spawn_entities()
  * Update all entities in the level
  */
 void
-state_level_update()
+level_update()
 {
     for (u32 i = 0; i < g_map->entity_count; ++i)
     {
@@ -130,7 +132,7 @@ state_level_update()
  * Spawn a temporary entity in the level
  */
 struct tagap_entity *
-state_level_spawn_entity(
+level_spawn_entity(
     struct tagap_entity_info *ei,
     vec2s position,
     f32 aim_angle,

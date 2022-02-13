@@ -208,7 +208,7 @@ entity_spawn_missile(
     if (!missile_e)
     {
         // Nothing in the pool that matches, so just spawn an new entity
-        missile_e = state_level_spawn_entity(missile,
+        missile_e = level_spawn_entity(missile,
             spawn_pos,
             owner->aim_angle,
             owner->flipped);
@@ -321,7 +321,7 @@ entity_update(struct tagap_entity *e)
     // Weapons
     struct tagap_entity_info *missile_info =
         g_state.l.weapons[e->info->stats[STAT_S_WEAPON]].primary;
-    if (e->inputs.fire && e->attack_timer > missile_info->think.attack_speed)
+    if (e->inputs.fire && e->attack_timer > missile_info->think.attack_delay)
     {
         entity_spawn_missile(e, missile_info);
         e->attack_timer = 0.0f;

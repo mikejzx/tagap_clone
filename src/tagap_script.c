@@ -8,171 +8,68 @@
 #include "tagap_script.h"
 #include "tagap_theme.h"
 
-// Top-level token
-enum atom_id
+#include "tagap_script_def.h"
+
+#define SCRIPT_ERROR(...) LOG_ERROR("[tagap_script] parse fail: " __VA_ARGS__)
+#define SCRIPT_WARN(...) LOG_WARN("[tagap_script] " __VA_ARGS__)
+#define LOG_SCRIPT(...) LOG_INFO("[tagap_script] " __VA_ARGS__)
+
+static i32 tagap_script_run_cmd_in_state(
+    enum tagap_script_atom_id, struct tagap_script_state *);
+static enum tagap_script_atom_id tagap_script_parse_cmd(
+    struct tagap_script_state *, const char *, size_t);
+
+/* Set script parser mode */
+static inline void
+tagap_script_set_parse_mode(
+    struct tagap_script_state *ss,
+    enum tagap_script_parse_mode mode)
 {
-    ATOM_UNKNOWN = 0,
-
-    /*
-     * Definition commands
-     */
-
-    // Used for general variables (e.g. map title)
-    ATOM_CVAR,
-
-    // Line definitions
-    // + INT: start X point
-    // + INT: start Y point
-    // + INT: end X point
-    // + INT: end Y point
-    // + INT: style flag
-    ATOM_LINEDEF,
-
-    // Used to state beginning of a texture polygon definition
-    // + STR: texture name (hidden prefix of data/art/textures/)
-    // + INT: texture offset
-    // + BOOL: texture shading
-    ATOM_POLYGON,
-
-    // Defines point of current polygon
-    // + INT: X position
-    // + INT: Y position
-    ATOM_POLYPOINT,
-
-    // Indicates end of polygon definition
-    ATOM_POLYGON_END,
-
-    // Defines a weapon slot
-    // INT: weapon slot ID
-    // STR: primary weapon entity name
-    // STR: secondary weapon entity name
-    // STR: weapon display name
-    ATOM_WEAPON,
-
-    // Adds entity into the level
-    // STR: entity name
-    // INT: entity X coordinates
-    // INT: entity Y coordinates
-    // INT: entity angle (in case of AI_AIM) or facing
-    // BOOL: activity state (0=active, 1=inactive)
-    ATOM_ENTITY_SET,
-
-    /*
-     * Entity commands
-     */
-
-    // Start of entity definition
-    // + STR: name of entity
-    ATOM_ENTITY_START,
-
-    // End of entity definition
-    ATOM_ENTITY_END,
-
-    // Set entity as as the entity's weapon model
-    // STR: name of entity to use as gun entity
-    ATOM_GUNENTITY,
-
-    // Clones all info of existing entity
-    // STR: name of entity to clone
-    ATOM_CLONE,
-
-    // Defines a sprite for an entity
-    // + STR: loading parameter (STATIC/DYNAMIC)
-    // + BOOL: full bright flag
-    // + STR: animation style
-    // + INT: sprite X offset
-    // + INT: sprite Y offset
-    // + STR: sprite name
-    ATOM_SPRITE,
-
-    // Additional sprite variables
-    // + INT: index of sprite
-    // + STR: variable name
-    // + INT: value (not used with [toggle] variables)
-    ATOM_SPRITEVAR,
-
-    // Defines AI routine used for entity
-    // + STR: main routine reference
-    // + FLOAT: speed modifier
-    // + STR: attack AI reference
-    // + FLOAT: delay between attacks
-    ATOM_THINK,
-
-    // Sets entity move type
-    // + STR: movement style flag
-    // + FLOAT: movement speed
-    ATOM_MOVETYPE,
-
-    // Sets an offset value
-    // + STR: variable name
-    // + INT x offset
-    // + INT y offset
-    ATOM_OFFSET,
-
-    // Defines entity sound
-    // + STR: sound event
-    // + STR: sample name
-    ATOM_SOUND,
-
-    // Defines an entity value
-    // + STR: variable name
-    // + INT: value (not used with [toggle] variables)
-    ATOM_STAT,
-
-    /*
-     * Theme commands
-     */
-    // Start theme
-    // STR: theme name
-    ATOM_THEME,
-    ATOM_THEME_END,
-
-    // Define theme colour
-    // BOOL: part of world to affect (0=world, 1=backgrounds)
-    // BOOL: target of colour shift (0=base, 1=shifted)
-    // BYTE x3: colours in RGB format
-    ATOM_COLOUR,
-
-    // (internal) Number of atoms we implement
-    ATOM_COUNT
-};
-
-static const char *ATOM_NAMES[] =
-{
-    [ATOM_UNKNOWN]      = "",
-    [ATOM_CVAR]         = "CVAR",
-    [ATOM_LINEDEF]      = "LINEDEF",
-    [ATOM_POLYGON]      = "POLYGON",
-    [ATOM_POLYPOINT]    = "POLYPOINT",
-    [ATOM_POLYGON_END]  = "POLYGON_END",
-    [ATOM_WEAPON]       = "WEAPON",
-    [ATOM_ENTITY_SET]   = "ENTITY_SET",
-    [ATOM_ENTITY_START] = "ENTITY_START",
-    [ATOM_ENTITY_END]   = "ENTITY_END",
-    [ATOM_GUNENTITY]    = "GUNENTITY",
-    [ATOM_CLONE]        = "CLONE",
-    [ATOM_SPRITE]       = "SPRITE",
-    [ATOM_SPRITEVAR]    = "SPRITEVAR",
-    [ATOM_THINK]        = "THINK",
-    [ATOM_MOVETYPE]     = "MOVETYPE",
-    [ATOM_OFFSET]       = "OFFSET",
-    [ATOM_SOUND]        = "SOUND",
-    [ATOM_STAT]         = "STAT",
-    [ATOM_THEME]        = "THEME",
-    [ATOM_THEME_END]    = "THEME_END",
-    [ATOM_COLOUR]       = "COLOR",
-};
+    if (ss->mode == mode) return;
+    if (mode != TAGAP_PARSE_NORMAL &&
+        ss->mode != TAGAP_PARSE_NORMAL)
+    {
+        SCRIPT_WARN("changing parser mode to '%d' when '%d' hadn't finished!",
+            mode, ss->mode);
+    }
+    ss->mode = mode;
+}
 
 /*
- * TODO: seperate command parsing to another function and allow running
- *       scripts via strings.  store parser state in some static struct or
- *       something (make sure to only allow 1 script to run at a time)
+ * Parse and run a command string
+ */
+i32
+tagap_script_run_cmd(
+    struct tagap_script_state *ss,
+    const char *cmd,
+    size_t cmd_len)
+{
+    // Parse the command
+    enum tagap_script_atom_id atom = tagap_script_parse_cmd(ss, cmd, cmd_len);
+    if (atom < 0) return -1;
+
+    // Run parsed command
+    i32 status = tagap_script_run_cmd_in_state(atom, ss);
+
+    // Finally, adjust the parser mode
+    if (status == 0 && ss->has_next_mode)
+    {
+        tagap_script_set_parse_mode(ss, ss->next_mode);
+        ss->has_next_mode = false;
+    }
+    return status;
+}
+
+/*
+ * Run script from file
  */
 i32
 tagap_script_run(const char *fpath)
 {
+    // Make sure that all defined atoms have strings
 #if DEBUG
-    assert(sizeof(ATOM_NAMES) / sizeof(const char *) == ATOM_COUNT);
+    assert(sizeof(TAGAP_SCRIPT_COMMANDS) /
+        sizeof(struct tagap_script_command) == _ATOM_COUNT);
 #endif
 
     FILE *fp = fopen(fpath, "r");
@@ -185,841 +82,582 @@ tagap_script_run(const char *fpath)
 
     LOG_INFO("running script '%s'", fpath);
 
-    // Handy shorthands
-    struct level *lvl = &g_state.l.map;
+    // Create state
+    struct tagap_script_state ss;
+    tagap_script_new_state(&ss);
 
-    enum parsing_mode
+    // Read the script file line by line
+    size_t len = 0, ltmp;
+    for (char *line = NULL; (len = getline(&line, &ltmp, fp)) != -1;)
     {
-        TAGAP_PARSE_NORMAL = 0,
-        TAGAP_PARSE_POLYGON,
-        TAGAP_PARSE_ENTITY,
-        TAGAP_PARSE_THEME,
-    } cur_parse_mode = TAGAP_PARSE_NORMAL;
-
-    // Read the script file, line by line
-    size_t len = 0, ltmp, line_num = 1;
-    char *line_tmp = malloc(256 * sizeof(char));
-    for (char *line = NULL; (len = getline(&line, &ltmp, fp)) != -1; ++line_num)
-    {
-        if (len < 1 || line[0] == '/') continue;
-
         // Strip newline
         if (line[len - 1] == '\n') line[len - 2] = '\0';
 
-        // Hacky fix to make sure strtok doesn't ruin the original line
-        strcpy(line_tmp, line);
-
-        enum atom_id atom = ATOM_UNKNOWN;
-
-    #define CUR_ENTITY_INFO \
-        &g_state.l.entity_infos[g_state.l.entity_info_count - 1]
-
-        // Parse all the tokens in the line
-        static const char *DELIM = " ";
-    #define TOK_NEXT strtok(NULL, DELIM)
-    #define TOK_IS(t) (strcmp(token, (t)) == 0)
-        for (char *token = strtok(line_tmp, DELIM);
-            token != NULL;
-            token = TOK_NEXT)
-        {
-            if (!atom)
-            {
-                // First token is the atom ID
-                for (enum atom_id a = 0;
-                    a < ATOM_COUNT;
-                    ++a)
-                {
-                    // Lookup atom ID from string
-                    if (!TOK_IS(ATOM_NAMES[a])) continue;
-                    atom = a;
-
-                    // Make sure that the atom is allowed in current parse mode
-                    switch (cur_parse_mode)
-                    {
-                    // Parsing POLYGONs
-                    case TAGAP_PARSE_POLYGON:
-                    {
-                        if (atom == ATOM_POLYGON_END) goto polygon_end;
-                        if (atom != ATOM_POLYPOINT)
-                        {
-                            LOG_ERROR(
-                                "[tagap_script] expected POLYPOINT "
-                                "or POLYGON_END (got %s) at %s:%d",
-                                ATOM_NAMES[a], fpath, line_num);
-                            goto next_line;
-                        }
-                    } break;
-
-                    // Parsing an ENTITY
-                    case TAGAP_PARSE_ENTITY:
-                    {
-                        if (atom == ATOM_ENTITY_END) goto entity_end;
-                    } break;
-
-                    // Parsing a THEME
-                    case TAGAP_PARSE_THEME:
-                    {
-                        if (atom == ATOM_THEME_END) goto theme_end;
-                    } break;
-
-                    // Normal parsing mode
-                    case TAGAP_PARSE_NORMAL:
-                    default: break;
-                    }
-
-                    break;
-                }
-
-                // Unidentified atom, skip to next line
-                if (!atom) goto next_line;
-
-                // We got an atom, continue parsing this line
-                continue;
-            }
-
-            switch(atom)
-            {
-            case ATOM_CVAR:
-            {
-                if (TOK_IS("map_title"))
-                {
-                    token = TOK_NEXT;
-                    LOG_INFO("[tagap_script] map: title '%s'", token);
-
-                    if (strlen(token) >= LEVEL_TITLE_MAX)
-                    {
-                        LOG_ERROR(
-                            "[tagap_script] map: title is too long: '%s'.  "
-                            "Length must not exceed %d chars",
-                            token, LEVEL_TITLE_MAX);
-                        strcpy(lvl->title, "(null)");
-                        break;
-                    }
-                    strcpy(lvl->title, token);
-
-                    break;
-                }
-                if (TOK_IS("snd_song"))
-                {
-                    token = TOK_NEXT;
-                    LOG_INFO("[tagap_script] map: song is '%s'", token);
-
-                    // TODO soundtrack
-                    break;
-                }
-                if (TOK_IS("map_scheme"))
-                {
-                    token = TOK_NEXT;
-                    LOG_INFO("[tagap_script] map: scheme is '%s'", token);
-
-                    // Find theme with this name
-                    for (u32 i = 0; i < g_state.l.theme_info_count; ++i)
-                    {
-                        if (strcmp(token, g_state.l.theme_infos[i].name) == 0)
-                        {
-                            lvl->theme = &g_state.l.theme_infos[i];
-                            break;
-                        }
-                    }
-                    break;
-                }
-
-            } break;
-
-            // Line definitions
-            case ATOM_LINEDEF:
-            {
-                if (lvl->linedef_count + 1 >= LEVEL_MAX_LINEDEFS)
-                {
-                    LOG_ERROR("[tagap_script] linedef limit (%d) exceeded",
-                        LEVEL_MAX_LINEDEFS);
-                    goto next_line;
-                }
-
-                struct tagap_linedef linedef;
-                if (sscanf(line, "LINEDEF %f %f %f %f %d",
-                    &linedef.start.x, &linedef.start.y,
-                    &linedef.end.x, &linedef.end.y,
-                    (i32 *)&linedef.style) != 5)
-                {
-                    LOG_ERROR("[tagap_script] invalid linedef (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                lvl->linedefs[lvl->linedef_count++] = linedef;
-
-            #if 0
-                LOG_DBUG("[tagap_script] new linedef: "
-                    "[%.0f, %.0f] to [%.0f %.0f], style %d",
-                    linedef.start.x, linedef.start.y,
-                    linedef.end.x, linedef.end.y,
-                    linedef.style);
-            #endif
-
-            } goto next_line;
-
-            // Begin textured polygon definition
-            case ATOM_POLYGON:
-            {
-                cur_parse_mode = TAGAP_PARSE_POLYGON;
-
-                if (strlen(token) >= POLYGON_TEX_NAME_MAX)
-                {
-                    LOG_ERROR(
-                        "[tagap_script] POLYGON title is too long: '%s'.  "
-                        "Length must not exceed %d chars",
-                        token, POLYGON_TEX_NAME_MAX);
-                    cur_parse_mode = TAGAP_PARSE_NORMAL;
-                    goto next_line;
-                }
-
-                // Copy texture name
-                struct tagap_polygon *cur_poly =
-                    &lvl->polygons[lvl->polygon_count++];
-                strcpy(cur_poly->tex_name, token);
-                token = TOK_NEXT;
-                if (!token)
-                {
-                    LOG_ERROR("[tagap_script] POLYGON: missing arguments "
-                        "on %s:%d",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                cur_poly->tex_offset_point = atoi(token);
-                token = TOK_NEXT;
-                if (!token)
-                {
-                    LOG_ERROR("[tagap_script] POLYGON: missing arguments "
-                        "on %s:%d",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                cur_poly->tex_is_shaded = !!atoi(token);
-            } goto next_line;
-
-            // Define point on current polygon
-            case ATOM_POLYPOINT:
-            {
-                // Don't exceed maximum polygons
-                if (lvl->polygon_count + 1 >= LEVEL_MAX_POLYGONS)
-                {
-                    LOG_ERROR("[tagap_script] polygon limit (%d) exceeded",
-                        LEVEL_MAX_POLYGONS);
-                    goto next_line;
-                }
-
-                struct tagap_polygon *cur_poly =
-                    &lvl->polygons[lvl->polygon_count - 1];
-                vec2s *point = &cur_poly->points[cur_poly->point_count++];
-                if (sscanf(line, "POLYPOINT %f %f",
-                    &point->x, &point->y) != 2)
-                {
-                    LOG_ERROR("[tagap_script] invalid polypoint (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-            } goto next_line;
-
-            // End of textured polygon definition
-            case ATOM_POLYGON_END:
-            polygon_end:
-            {
-                cur_parse_mode = TAGAP_PARSE_NORMAL;
-                struct tagap_polygon *cur_poly =
-                    &lvl->polygons[lvl->polygon_count - 1];
-
-                if (cur_poly->point_count < 3)
-                {
-                    LOG_ERROR("[tagap_script] invalid polygon "
-                        "(needs at least 3 points) (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-
-            #if 0
-                LOG_DBUG("END POLYGON: %d points", cur_poly->point_count);
-                for (i32 i = 0; i < cur_poly->point_count; ++i)
-                {
-                    LOG_DBUG("  PT: [%.2f %.2f]",
-                        cur_poly->points[i].x, cur_poly->points[i].y);
-                }
-            #endif
-            } goto next_line;
-
-            // Define weapon slot
-            case ATOM_WEAPON:
-            {
-                if (!token)
-                {
-                    LOG_ERROR("[tagap_script] WEAPON: missing slot (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                i32 slot = (i32)atoi(token);
-                if (slot < 0 || slot >= WEAPON_DISPLAY_NAME_MAX)
-                {
-                    LOG_ERROR("[tagap_script] WEAPON: invalid slot %d (%s:%d)",
-                        slot, fpath, line_num);
-                    goto next_line;
-                }
-                struct tagap_weapon *weap = &g_state.l.weapons[slot];
-
-                // Get primary entity
-                token = TOK_NEXT;
-                if (!token)
-                {
-                    LOG_ERROR("[tagap_script] WEAPON: missing primary (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                weap->primary = NULL;
-                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
-                {
-                    struct tagap_entity_info *e = &g_state.l.entity_infos[i];
-                    if (strcmp(e->name, token) == 0)
-                    {
-                        weap->primary  = e;
-                        break;
-                    }
-                }
-                if (!weap->primary)
-                {
-                    LOG_WARN("[tagap_script] WEAPON: can't find "
-                        "primary entity '%s'", token);
-                }
-
-                // Get secondary entity
-                token = TOK_NEXT;
-                if (!token)
-                {
-                    LOG_ERROR("[tagap_script] WEAPON: missing "
-                        "secondary (%s:%d)", fpath, line_num);
-                    goto next_line;
-                }
-                weap->secondary = NULL;
-                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
-                {
-                    struct tagap_entity_info *e = &g_state.l.entity_infos[i];
-                    if (strcmp(e->name, token) == 0)
-                    {
-                        weap->secondary  = e;
-                        break;
-                    }
-                }
-                if (!weap->secondary)
-                {
-                    LOG_WARN("[tagap_script] WEAPON: can't find "
-                        "secondary entity '%s'", token);
-                }
-
-                // Get display name
-                token = TOK_NEXT;
-                if (!token)
-                {
-                    LOG_WARN("[tagap_script] WEAPON: missing "
-                        "display name (%s:%d)", fpath, line_num);
-                    strcpy(g_state.l.weapons[slot].display_name, "(null)");
-                }
-                else if (strlen(token) >= WEAPON_DISPLAY_NAME_MAX)
-                {
-                    LOG_ERROR("[tagap_script] WEAPON: name '%s' too long",
-                        token);
-                    strcpy(g_state.l.weapons[slot].display_name, "(null)");
-                }
-                else
-                {
-                    // Copy display name
-                    strcpy(g_state.l.weapons[slot].display_name, token);
-                }
-            } goto next_line;
-
-            // Begin entity info definition
-            case ATOM_ENTITY_START:
-            {
-                // Make sure we don't exceed entity list
-                if (g_state.l.entity_info_count + 1 >= GAME_ENTITY_INFO_LIMIT)
-                {
-                    LOG_ERROR("[tagap_script] entity limit (%d) exceeded",
-                        GAME_ENTITY_INFO_LIMIT);
-                    goto next_line;
-                }
-
-                u32 index = g_state.l.entity_info_count;
-                struct tagap_entity_info *e = &g_state.l.entity_infos[index];
-                memset(e, 0, sizeof(struct tagap_entity_info));
-
-                if (strlen(token) >= ENTITY_NAME_MAX)
-                {
-                    LOG_ERROR("[tagap_script] entity name is too "
-                        "long (max %d) in (%s:%d)",
-                        ENTITY_NAME_MAX, fpath, line_num);
-                    goto next_line;
-                }
-
-                cur_parse_mode = TAGAP_PARSE_ENTITY;
-                ++g_state.l.entity_info_count;
-
-                // Set the entity name
-                strcpy(e->name, token);
-
-                //LOG_DBUG("NEW ENTITY '%s'", cur_entity->name);
-            } goto next_line;
-
-            // End entity definition
-            case ATOM_ENTITY_END:
-            entity_end:
-            {
-                // Reset to normal parsing mode
-                cur_parse_mode = TAGAP_PARSE_NORMAL;
-            } goto next_line;
-
-            // Add entity into level
-            case ATOM_ENTITY_SET:
-            {
-                // Don't exceed limit
-                if (lvl->entity_count + 1 >= LEVEL_MAX_ENTITIES)
-                {
-                    LOG_ERROR("[tagap_script] level entity limit (%d) exceeded",
-                        LEVEL_MAX_ENTITIES);
-                    goto next_line;
-                }
-
-                // Get entity info from given name
-                struct tagap_entity_info *ei = NULL;
-                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
-                {
-                    // Find the entity with specified name
-                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
-                        continue;
-
-                    ei = &g_state.l.entity_infos[i];
-                    break;
-                }
-                if (!ei)
-                {
-                    LOG_ERROR("[tagap_script] ENTITY_SET: "
-                        "no entity with name '%s'", token);
-                    goto next_line;
-                }
-
-                // Add entity to entity list
-                struct tagap_entity e;
-                memset(&e, 0, sizeof(struct tagap_entity));
-                e.info = ei;
-
-                // X coordinate
-                token = TOK_NEXT;
-                e.position.x = (f32)atoi(token);
-
-                // Y coordinate
-                token = TOK_NEXT;
-                e.position.y = (f32)atoi(token);
-
-                // Entity angle or facing
-                token = TOK_NEXT;
-                e.aim_angle = (int)atoi(token);
-
-                // Activity state (unimplemented)
-                //token = TOK_NEXT;
-                //e.active = !!atoi(token);
-
-                lvl->entities[lvl->entity_count++] = e;
-            } goto next_line;
-
-            // Weapon entity
-            case ATOM_GUNENTITY:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] GUNENTITY: not on entity");
-                    goto next_line;
-                }
-
-                // TODO: put this into a function
-                struct tagap_entity_info *gunent = NULL;
-                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
-                {
-                    // Find the entity with specified name
-                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
-                        continue;
-
-                    gunent = &g_state.l.entity_infos[i];
-                    break;
-                }
-                if (!gunent)
-                {
-                    LOG_WARN("[tagap_script] GUNENTITY: "
-                        "no entity with name '%s'", token);
-                    goto next_line;
-                }
-
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-                e->gun_entity = gunent;
-            } goto next_line;
-
-            // Copy entity info
-            case ATOM_CLONE:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] CLONE: not on entity");
-                    goto next_line;
-                }
-
-                // TODO: put this into a function
-                struct tagap_entity_info *to_copy = NULL;
-                for (u32 i = 0; i < g_state.l.entity_info_count; ++i)
-                {
-                    // Find the entity with specified name
-                    if (strcmp(g_state.l.entity_infos[i].name, token) != 0)
-                        continue;
-
-                    to_copy = &g_state.l.entity_infos[i];
-                    break;
-                }
-                if (!to_copy)
-                {
-                    LOG_WARN("[tagap_script] CLONE: "
-                        "no entity with name '%s'", token);
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-                entity_info_clone(e, to_copy, true);
-            } goto next_line;
-
-            // Define sprite on entity
-            case ATOM_SPRITE:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] SPRITE: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity to set sprite on
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // Check bounds of entity sprite list
-                i32 spr_entity_index = e->sprite_count;
-                if (spr_entity_index + 1 >= ENTITY_MAX_SPRITES)
-                {
-                    LOG_ERROR("[tagap_script] SPRITE: too many sprites (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-
-                // Temporary sprite for us to work with here
-                struct tagap_entity_sprite spr_entity;
-                memset(&spr_entity, 0, sizeof(struct tagap_entity_sprite));
-
-                // Loading parameter (ignored)
-                token = TOK_NEXT;
-
-                // Bright flag
-                spr_entity.bright = !!atoi(token);
-                token = TOK_NEXT;
-
-                // Animation
-                spr_entity.anim = lookup_tagap_anim(token);
-                token = TOK_NEXT;
-
-                // Offset
-                spr_entity.offset.x = (f32)atoi(token);
-                token = TOK_NEXT;
-                spr_entity.offset.y = (f32)atoi(token);
-                token = TOK_NEXT;
-
-                // Sprite name
-                if (token == NULL)
-                {
-                    LOG_ERROR("[tagap_script] SPRITE: missing name in (%s:%d)",
-                        fpath, line_num);
-                    goto next_line;
-                }
-                if (strlen(token) > SPRITE_NAME_MAX)
-                {
-                    LOG_ERROR("[tagap_script] SPRITE: name is too "
-                        "long (max %d) in (%s:%d)",
-                        SPRITE_NAME_MAX, fpath, line_num);
-                    goto next_line;
-                }
-
-                // Try find the sprite in global list
-                struct tagap_sprite_info *info = NULL;
-                for (u32 i = 0; i < g_state.l.sprite_info_count; ++i)
-                {
-                    if (strcmp(g_state.l.sprite_infos[i].name, token) == 0)
-                    {
-                        info = &g_state.l.sprite_infos[i];
-                        //LOG_DBUG("reuse %s at %d", token, spr_global_index);
-                        break;
-                    }
-                }
-                if (info == NULL)
-                {
-                    // Sprite has not been added to the list yet.  Add it now
-                    i32 spr_global_index = g_state.l.sprite_info_count;
-
-                    // Check that the global sprite list isn't full
-                    if (spr_global_index + 1 >= GAME_SPRITE_INFO_LIMIT)
-                    {
-                        LOG_ERROR("[tagap_script] SPRITE: info limit (%d) "
-                            "reached", GAME_SPRITE_INFO_LIMIT);
-                        goto next_line;
-                    }
-                    ++g_state.l.sprite_info_count;
-                    //LOG_DBUG("added %s to %d", token, spr_global_index);
-
-                    // Get the info and zero it out
-                    info = &g_state.l.sprite_infos[spr_global_index];
-                    memset(info, 0, sizeof(struct tagap_sprite_info));
-                    strcpy(g_state.l.sprite_infos[spr_global_index].name,
-                        token);
-                }
-
-                // And finally copy the info over to the entity
-                spr_entity.info = info;
-                e->sprites[spr_entity_index] = spr_entity;
-                ++e->sprite_count;
-            } goto next_line;
-
-            // Defines sprite variable for entity sprite
-            case ATOM_SPRITEVAR:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] SPRITE: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // 1st arg: sprite index
-                i32 spr_index = (i32)atoi(token);
-                token = TOK_NEXT;
-
-                // Get sprite
-                if (spr_index < 0 || spr_index >= ENTITY_MAX_SPRITES)
-                {
-                    LOG_ERROR("[tagap_script] SPRITEVAR: invalid index");
-                    goto next_line;
-                }
-
-                // 2nd arg: variable name
-                enum tagap_spritevar_id id = lookup_tagap_spritevar(token);
-
-                // Optional 3rd arg: variable value
-                token = TOK_NEXT;
-                if (token != NULL)
-                {
-                    // 3rd arg: variable value
-                    e->sprites[spr_index].vars[id] = (i32)atoi(token);
-                }
-                else
-                {
-                    // Set value to an initial true value for toggled variables
-                    e->sprites[spr_index].vars[id] = 1;
-                }
-            } goto next_line;
-
-            // Defines entity AI routine
-            case ATOM_THINK:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] THINK: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // Get mode, speed modifier, (skip attack reference), and
-                // attack speed
-                e->think.mode = lookup_tagap_think(token);
-                token = TOK_NEXT;
-                e->think.speed_mod = (f32)atof(token);
-                token = TOK_NEXT;
-                // ... skip
-                token = TOK_NEXT;
-                if (token)
-                {
-                    e->think.attack_speed = (f32)atof(token);
-                }
-                else
-                {
-                    LOG_WARN("[tagap_script] THINK: missing attack speed %s:%d",
-                        fpath, line_num);
-                    e->think.attack_speed = 1.0f;
-                }
-
-                // Skip other parameters as we don't care about them right now
-            } goto next_line;
-
-            // Defines entity move type
-            case ATOM_MOVETYPE:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] MOVETYPE: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // Get mode and speed modifier
-                e->move.type = lookup_tagap_movetype(token);
-                token = TOK_NEXT;
-                e->move.speed = (f32)atof(token);
-
-                // Skip other parameters as we don't care about them right now
-            } goto next_line;
-
-            // Defines an offset variable for an entity
-            case ATOM_OFFSET:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] OFFSET: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // Get offset ID
-                enum tagap_entity_offset_id id = lookup_tagap_offset(token);
-
-                // Read X value
-                token = TOK_NEXT;
-                if (token == NULL)
-                {
-                    LOG_ERROR("[tagap_script] OFFSET: missing X token");
-                    e->offsets[id].x = 0.0f;
-                    goto next_line;
-                }
-                e->offsets[id].x = (f32)atoi(token);
-
-                // Read Y value
-                token = TOK_NEXT;
-                if (token == NULL)
-                {
-                    LOG_WARN("[tagap_script] OFFSET: missing Y token");
-                    e->offsets[id].y = 0.0f;
-                    goto next_line;
-                }
-                e->offsets[id].y = (f32)atoi(token);
-            } goto next_line;
-
-            // Defines STAT value for entity
-            case ATOM_STAT:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_ENTITY)
-                {
-                    LOG_ERROR("[tagap_script] STAT: not on entity");
-                    goto next_line;
-                }
-
-                // Get current entity
-                struct tagap_entity_info *e = CUR_ENTITY_INFO;
-
-                // Read stat ID and value
-                enum tagap_entity_stat_id id = lookup_tagap_stat(token);
-                token = TOK_NEXT;
-                if (token) e->stats[id] = (i32)atoi(token);
-            } goto next_line;
-
-            // Begin theme definition
-            case ATOM_THEME:
-            {
-                // Make sure we don't exceed theme limit
-                if (g_state.l.theme_info_count + 1 >= GAME_THEME_INFO_LIMIT)
-                {
-                    LOG_ERROR("[tagap_script] THEME: limit (%d) exceeded",
-                        GAME_THEME_INFO_LIMIT);
-                    goto next_line;
-                }
-
-                u32 index = g_state.l.theme_info_count;
-                struct tagap_theme_info *t = &g_state.l.theme_infos[index];
-                memset(t, 0, sizeof(struct tagap_theme_info));
-
-                if (strlen(token) >= THEME_NAME_MAX)
-                {
-                    LOG_ERROR("[tagap_script] THEME: name is too "
-                        "long (max %d) in (%s:%d)",
-                        THEME_NAME_MAX, fpath, line_num);
-                    goto next_line;
-                }
-
-                cur_parse_mode = TAGAP_PARSE_THEME;
-                ++g_state.l.theme_info_count;
-
-                // Set the theme name
-                strcpy(t->name, token);
-            } goto next_line;
-
-            // Theme colour definition
-            case ATOM_COLOUR:
-            {
-                if (cur_parse_mode != TAGAP_PARSE_THEME)
-                {
-                    LOG_ERROR("[tagap_script] COLOR: not on theme");
-                    goto next_line;
-                }
-
-                // Get current theme
-                struct tagap_theme_info *t =
-                    &g_state.l.theme_infos[g_state.l.theme_info_count - 1];
-
-                // Get 'affect'
-                enum tagap_theme_affect_id affect =
-                    (enum tagap_theme_affect_id)atoi(token);
-                token = TOK_NEXT;
-
-                // Get 'state'
-                enum tagap_theme_state state =
-                    (enum tagap_theme_state)atoi(token);
-                token = TOK_NEXT;
-
-                // Get RGB colour
-                i32 r = atoi(token);
-                token = TOK_NEXT;
-                i32 g = atoi(token);
-                token = TOK_NEXT;
-                i32 b = atoi(token);
-
-                t->colours[affect][state] = (vec3s)
-                {{
-                     (f32)r / 255.0f,
-                     (f32)g / 255.0f,
-                     (f32)b / 255.0f,
-                }};
-            } goto next_line;
-
-            // End theme definition
-            case ATOM_THEME_END:
-            theme_end:
-            {
-                // Reset to normal parsing mode
-                cur_parse_mode = TAGAP_PARSE_NORMAL;
-            } goto next_line;
-
-            // Skip unimplemented atoms
-            default: goto next_line;
-            }
-        }
-
-    next_line:
-        continue;
+        // Parse and run the command
+        tagap_script_run_cmd(&ss, line, len);
     }
-    free(line_tmp);
 
     fclose(fp);
 
     return 0;
 }
+
+/*
+ * Parse a string of TAGAP_Script
+ */
+static enum tagap_script_atom_id
+tagap_script_parse_cmd(
+    struct tagap_script_state *ss,
+    const char *cmd_str,
+    size_t cmd_len)
+{
+    if (cmd_len < 1 || cmd_str[0] == '/') return 0;
+    strcpy(ss->tmp, cmd_str);
+
+    // Get the first token in the string, this is our command ID
+    char *token = strtok(ss->tmp, " ");
+    if (token == NULL) return -1;
+
+    // Get info about the command we are parsing.  We store parsed token values
+    // in here too
+    enum tagap_script_atom_id atom;
+    struct tagap_script_command cmd =
+        tagap_script_lookup_command(token, &atom);
+    if (atom == ATOM_UNKNOWN)
+    {
+        // Unknown/unimplemented command
+        return -1;
+    }
+
+    // Make sure that we are in the right parsing mode
+    if (cmd.requires_mode && ss->mode != cmd.required_mode)
+    {
+        SCRIPT_ERROR("cannot parse command '%s' "
+            "because parse mode '%d' not satisfied (is %d)",
+            cmd.name, cmd.required_mode, ss->mode);
+        return -1;
+    }
+
+    {
+        // Get minimum number of tokens we need to successfully parse
+        u32 min_tok_count = cmd.token_count;
+        if (min_tok_count > 0 && cmd.tokens[min_tok_count - 1].optional)
+        {
+            // Last parameter is optional.
+            --min_tok_count;
+        }
+
+        // Count number of tokens in the string and make sure they are
+        // sufficient
+        u32 tok_count = 0;
+        const char *tmpptr = cmd_str;
+        for (;(tmpptr = strchr(tmpptr, ' ')) != NULL; ++tok_count, ++tmpptr);
+        if (tok_count < min_tok_count)
+        {
+            LOG_ERROR("[tagap_script] parse fail: "
+                "token count (%d) does not meet minimum of %d tokens",
+                tok_count, min_tok_count);
+            return -1;
+        }
+    }
+
+    // Zero all the tokens so that unspecified optional parameters don't cause
+    // issues
+    memset(ss->tok, 0, sizeof(union tagap_script_token_value));
+    ss->tok_count = 0;
+
+    // Now iterate over the tokens/parameters in the command
+    for (token = strtok(NULL, " ");
+        token != NULL;
+        token = strtok(NULL, " "))
+    {
+        i32 tok_index = ss->tok_count;
+        union tagap_script_token_value *v = &ss->tok[tok_index];
+        ++ss->tok_count;
+
+        // Used for strtof, strtod, etc. error checking
+        char *tmp_ptr;
+
+        // Convert token to appropriate types and store in the parser for
+        // proper parsing
+        switch(cmd.tokens[tok_index].type)
+        {
+        // Token is an integer
+        case TSCRIPT_TOKEN_INT:
+        {
+            v->i = strtol(token, &tmp_ptr, 10);
+            if (v->i == 0 && tmp_ptr == token)
+            {
+                SCRIPT_ERROR("error parsing 'int' token: '%s'", token);
+                return -1;
+            }
+        } break;
+
+        // Token is floating-point
+        case TSCRIPT_TOKEN_FLOAT:
+        {
+            v->f = strtof(token, &tmp_ptr);
+            if (v->f == 0.0f && tmp_ptr == token)
+            {
+                SCRIPT_ERROR("error parsing 'float' token: '%s'", token);
+                return -1;
+            }
+        } break;
+
+        // Token is boolean
+        case TSCRIPT_TOKEN_BOOL:
+        {
+            v->b = (bool)!!strtol(token, &tmp_ptr, 10);
+            if (v->b == 0 && tmp_ptr == token)
+            {
+                SCRIPT_ERROR("error parsing 'bool' token: '%s'", token);
+                return -1;
+            }
+        } break;
+
+        // Token is a string
+        case TSCRIPT_TOKEN_STRING:
+        {
+            size_t slen = strlen(token);
+            if (slen >= TAGAP_SCRIPT_STRING_TOKEN_MAX ||
+                slen >= cmd.tokens[tok_index].length)
+            {
+                SCRIPT_ERROR("'string' token '%s' is too long", token);
+                return -1;
+            }
+
+            // Just copy the string
+            strcpy(v->str, token);
+        } break;
+
+        // Special: token is an enum value that needs to be looked up
+        case TSCRIPT_TOKEN_LOOKUP:
+        {
+            if (!cmd.tokens[tok_index].lookup_func)
+            {
+                SCRIPT_ERROR("lookup_func for '%s' not defined", cmd.name);
+                return -1;
+            }
+
+            // Set the integer to the lookup-up value
+            v->i = cmd.tokens[tok_index].lookup_func(token);
+        } break;
+
+        // Special: token is name of an entity
+        case TSCRIPT_TOKEN_ENTITY:
+        {
+            // Search for the entity info in the entity list
+            v->e = NULL;
+            for (u32 i = 0; i < g_level->entity_info_count; ++i)
+            {
+                struct tagap_entity_info *e = &g_level->entity_infos[i];
+                if (strcmp(e->name, token) == 0)
+                {
+                    v->e = e;
+                    LOG_SCRIPT("found info for entity %s", token);
+                    break;
+                }
+            }
+            if (!v->e)
+            {
+                SCRIPT_WARN("entity '%s' not found", token);
+                return -1;
+            }
+        } break;
+
+        // Special: token is name of a theme
+        case TSCRIPT_TOKEN_THEME:
+        {
+            // Search for the theme info in the theme list
+            v->t = NULL;
+            for (u32 i = 0; i < g_level->theme_info_count; ++i)
+            {
+                struct tagap_theme_info *t = &g_level->theme_infos[i];
+                if (strcmp(t->name, token) == 0)
+                {
+                    v->t = t;
+                    LOG_SCRIPT("found info for theme %s", token);
+                    break;
+                }
+            }
+            if (!v->t)
+            {
+                SCRIPT_WARN("theme '%s' not found", token);
+                return -1;
+            }
+        } break;
+        }
+    }
+
+    if (cmd.sets_mode)
+    {
+        ss->has_next_mode = true;
+        ss->next_mode = cmd.sets_mode_to;
+    }
+
+    return atom;
+}
+
+/*
+ * Run the command currently in script state
+ */
+static i32
+tagap_script_run_cmd_in_state(
+    enum tagap_script_atom_id atom,
+    struct tagap_script_state *ss)
+{
+    switch (atom)
+    {
+    // Internal game stuff
+    case ATOM_CVAR:
+    {
+        enum tagap_cvar_id cvar = ss->tok[0].i;
+        const char *value = ss->tok[1].str;
+
+        // First argument is CVAR type
+        switch (cvar)
+        {
+        case CVAR_MAP_TITLE:
+            LOG_SCRIPT("CVAR: map title is %s", value);
+            strcpy(g_map->title, value);
+            break;
+        case CVAR_MAP_SCHEME:
+            LOG_SCRIPT("CVAR: map scheme is %s", value);
+
+            // Find theme with given name
+            g_map->theme = NULL;
+            for (u32 i = 0; i < g_level->theme_info_count; ++i)
+            {
+                if (strcmp(g_level->theme_infos[i].name, value) == 0)
+                {
+                    g_map->theme = &g_level->theme_infos[i];
+                    break;
+                }
+            }
+            if (!g_map->theme)
+            {
+                SCRIPT_WARN("CVAR: no such theme '%s'", value);
+            }
+            break;
+        case CVAR_SND_SONG:
+            LOG_SCRIPT("CVAR: map song is %s", value);
+            break;
+        default: break;
+        }
+    } break;
+
+    // Line definitions
+    case ATOM_LINEDEF:
+    {
+        if (g_map->linedef_count + 1 >= LEVEL_MAX_LINEDEFS)
+        {
+            SCRIPT_ERROR("LINEDEF: limit (%d) exceeded", LEVEL_MAX_LINEDEFS);
+            return -1;
+        }
+        // Copy linedef info
+        g_map->linedefs[g_map->linedef_count++] = (struct tagap_linedef)
+        {
+            .start.x = (f32)ss->tok[0].i,
+            .start.y = (f32)ss->tok[1].i,
+            .end.x = (f32)ss->tok[2].i,
+            .end.y = (f32)ss->tok[3].i,
+            .style = ss->tok[4].i,
+        };
+    } break;
+
+    // Polygon definition
+    case ATOM_POLYGON:
+    {
+        if (g_map->polygon_count + 1 >= LEVEL_MAX_POLYGONS)
+        {
+            SCRIPT_ERROR("POLYGON: limit (%d) exceeded", LEVEL_MAX_POLYGONS);
+            return -1;
+        }
+
+        struct tagap_polygon *p = &g_map->polygons[g_map->polygon_count++];
+        *p = (struct tagap_polygon)
+        {
+            .tex_offset_point = ss->tok[1].i,
+            .tex_is_shaded = ss->tok[2].i,
+            .tex_is_shaded = ss->tok[3].i,
+            .point_count = 0,
+        };
+        strcpy(p->tex_name, ss->tok[0].str);
+    } break;
+
+    // End of polygon definition
+    case ATOM_POLYGON_END: break;
+
+    // Polygon point definition
+    case ATOM_POLYPOINT:
+    {
+        struct tagap_polygon *p = &g_map->polygons[g_map->polygon_count - 1];
+        if (p->point_count + 1 >= POLYGON_MAX_POINTS)
+        {
+            SCRIPT_ERROR("POLYPOINT: too many points on polygon (%d, max:%d)",
+                p->point_count + 1, POLYGON_MAX_POINTS);
+            return -1;
+        }
+        p->points[p->point_count++] = (vec2s)
+        {
+            .x = ss->tok[0].f,
+            .y = ss->tok[1].f,
+        };
+    } break;
+
+    // Begin theme definition
+    case ATOM_THEME:
+    {
+        if (g_level->theme_info_count + 1 >= GAME_THEME_INFO_LIMIT)
+        {
+            SCRIPT_ERROR("THEME: limit (%d) exceeded", GAME_THEME_INFO_LIMIT);
+            return -1;
+        }
+        struct tagap_theme_info *t =
+            &g_level->theme_infos[g_level->theme_info_count++];
+        memset(t, 0, sizeof(struct tagap_theme_info));
+        strcpy(t->name, ss->tok[0].str);
+    } break;
+
+    // End theme definition
+    case ATOM_THEME_END: break;
+
+    // Theme colour definition
+    case ATOM_COLOUR:
+    {
+        g_level->theme_infos[g_level->theme_info_count - 1]
+            .colours[ss->tok[0].b][ss->tok[1].b] = (vec3s)
+        {
+            .x = (f32)ss->tok[2].i / 255.0f,
+            .y = (f32)ss->tok[3].i / 255.0f,
+            .z = (f32)ss->tok[4].i / 255.0f,
+        };
+    } break;
+
+    // Begin entity definition
+    case ATOM_ENTITY_START:
+    {
+        if (g_level->entity_info_count + 1 >= GAME_ENTITY_INFO_LIMIT)
+        {
+            SCRIPT_ERROR("ENTITY_START: limit (%d) exceeded",
+                GAME_ENTITY_INFO_LIMIT);
+            return -1;
+        }
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count++];
+        memset(e, 0, sizeof(struct tagap_entity_info));
+        strcpy(e->name, ss->tok[0].str);
+    } break;
+
+    // End of entity definition
+    case ATOM_ENTITY_END: break;
+
+    // Spawn an entity into the world
+    case ATOM_ENTITY_SET:
+    {
+        if (g_map->entity_count + 1 >= LEVEL_MAX_ENTITIES)
+        {
+            SCRIPT_ERROR("ENTITY_SET: limit (%d) exceeded", LEVEL_MAX_ENTITIES);
+            return -1;
+        }
+        if (ss->tok[0].e == NULL)
+        {
+            SCRIPT_WARN("ENTITY_SET: parsed entity is null");
+            return -1;
+        }
+        g_map->entities[g_map->entity_count++] = (struct tagap_entity)
+        {
+            .info = ss->tok[0].e,
+            .position = (vec2s){ (f32)ss->tok[1].i, (f32)ss->tok[2].i },
+            .aim_angle = (f32)ss->tok[3].i,
+            .active = !ss->tok[4].b,
+        };
+    } break;
+
+    // Clone entity info
+    case ATOM_CLONE:
+    {
+        entity_info_clone(
+            &g_level->entity_infos[g_level->entity_info_count - 1],
+            ss->tok[0].e,
+            true);
+    } break;
+
+    // Set sprite on entity
+    case ATOM_SPRITE:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        // Check bounds of entity sprite list
+        if (e->sprite_count + 1 >= ENTITY_MAX_SPRITES)
+        {
+            SCRIPT_ERROR("SPRITE: too many sprites (%d, max:%d)",
+                e->sprite_count + 1, ENTITY_MAX_SPRITES);
+            return -1;
+        }
+
+        // Check global list if sprite info has already been added , so we can
+        // reuse it (and hence avoid re-reading it's frames, etc.)
+        struct tagap_sprite_info *info = NULL;
+        for (u32 i = 0; i < g_level->sprite_info_count; ++i)
+        {
+            if (strcmp(g_level->sprite_infos[i].name, ss->tok[5].str) == 0)
+            {
+                info = &g_level->sprite_infos[i];
+                break;
+            }
+        }
+        if (!info)
+        {
+            // Sprite has not been added to the list yet, so let's add it.
+            i32 spr_index_global = g_level->sprite_info_count;
+
+            // Check that the global sprite list isn't full
+            if (spr_index_global + 1 >= GAME_SPRITE_INFO_LIMIT)
+            {
+                SCRIPT_ERROR("SPRITE: info limit (%d) reached",
+                    GAME_SPRITE_INFO_LIMIT);
+                return -1;
+            }
+            ++g_level->sprite_info_count;
+
+            // Get the info, zero it out, and copy the name over
+            info = &g_level->sprite_infos[spr_index_global];
+            memset(info, 0, sizeof(struct tagap_sprite_info));
+            strcpy(g_level->sprite_infos[spr_index_global].name,
+                ss->tok[5].str);
+        }
+
+        // Get sprite in the entity info list
+        struct tagap_entity_sprite *spr = &e->sprites[e->sprite_count++];
+        *spr = (struct tagap_entity_sprite)
+        {
+            .info = info,
+            .bright = ss->tok[1].b,
+            .anim = (enum tagap_anim)ss->tok[2].i,
+            .offset.x = (f32)ss->tok[3].i,
+            .offset.y = (f32)ss->tok[4].i,
+        };
+    } break;
+
+    // Defines a variable for a sprite
+    case ATOM_SPRITEVAR:
+    {
+        // Check that integer is in range
+        if (ss->tok[0].i < 0 || ss->tok[0].i >= ENTITY_MAX_SPRITES)
+        {
+            SCRIPT_ERROR("SPRITEVAR: invalid index %d", ss->tok[0].i);
+            return -1;
+        }
+
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        // Check if optional argument was given
+        if (ss->tok_count < TAGAP_SCRIPT_COMMANDS[atom].token_count)
+        {
+            // Toggle variable on
+            e->sprites[ss->tok[0].i].vars[ss->tok[1].i] = 1;
+        }
+        else
+        {
+            // Set to value that was given
+            e->sprites[ss->tok[0].i].vars[ss->tok[1].i] = ss->tok[2].i;
+        }
+    } break;
+
+    // Sets entity movement type
+    case ATOM_MOVETYPE:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        e->move = (struct tagap_entity_movetype)
+        {
+            .type = ss->tok[0].i,
+            .speed = ss->tok[1].f,
+        };
+    } break;
+
+    // Sets entity AI routine mode
+    case ATOM_THINK:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        e->think = (struct tagap_entity_think)
+        {
+            .mode = ss->tok[0].i,
+            .speed_mod = ss->tok[1].f,
+            .attack = ss->tok[2].i,
+            .attack_delay = ss->tok[3].f,
+        };
+    } break;
+
+    // Sets an offset for an entity
+    case ATOM_OFFSET:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        e->offsets[ss->tok[0].i] = (vec2s)
+        {
+            .x = (f32)ss->tok[1].i,
+            .y = (f32)ss->tok[2].i,
+        };
+    } break;
+
+    // Sets a variable for an entity
+    case ATOM_STAT:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        // Check if optional parameter was passed
+        if (ss->tok_count < TAGAP_SCRIPT_COMMANDS[atom].token_count)
+        {
+            // Toggle variable
+            e->stats[ss->tok[0].i] = 1;
+        }
+        else
+        {
+            e->stats[ss->tok[0].i] = ss->tok[1].i;
+        }
+    } break;
+
+    // Sets entity as weapon model
+    case ATOM_GUNENTITY:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+        e->gun_entity = ss->tok[0].e;
+    } break;
+
+    // Sets a weapon slot
+    case ATOM_WEAPON:
+    {
+        // Check that the slot is in range
+        if (ss->tok[0].i < 0 || ss->tok[0].i >= WEAPON_SLOT_COUNT)
+        {
+            SCRIPT_ERROR("WEAPON: slot index '%d' out of range", ss->tok[0].i);
+            return -1;
+        }
+
+        // Copy data into the weapon slot
+        struct tagap_weapon *w = &g_level->weapons[ss->tok[0].i];
+        strcpy(w->display_name, ss->tok[3].str);
+        w->primary = ss->tok[1].e;
+        w->secondary = ss->tok[2].e;
+    } break;
+
+    default: break;
+    }
+
+    return 0;
+}
+
+#undef SCRIPT_ERROR
+#undef SCRIPT_WARN
+#undef LOG_SCRIPT
+

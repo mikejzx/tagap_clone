@@ -79,17 +79,18 @@ struct state_level
     struct player player;
 };
 
+extern struct state_level *g_level;
 extern struct level *g_map;
 
-void state_level_init(void);
-void state_level_reset(void);
-void state_level_deinit(void);
+void level_init(void);
+void level_reset(void);
+void level_deinit(void);
 
-void state_level_submit_to_renderer(void);
-void state_level_spawn_entities(void);
-void state_level_update(void);
+void level_submit_to_renderer(void);
+void level_spawn_entities(void);
+void level_update(void);
 
-struct tagap_entity *state_level_spawn_entity(
+struct tagap_entity *level_spawn_entity(
     struct tagap_entity_info *ei,
     vec2s position,
     f32 aim_angle,

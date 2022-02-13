@@ -1,6 +1,23 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+// Useful macro to create lookup functions for enum types
+// Also contains an assert to avoid serious issues
+#define CREATE_LOOKUP_FUNC(func_name, names, count) \
+    static inline i32 \
+    func_name (const char *x) \
+    { \
+        assert(sizeof((names)) / sizeof(const char *) == (count)); \
+        for (i32 i = 0; i < (count); ++i) \
+        { \
+            if (strcmp(x, (names)[i]) == 0)\
+            { \
+                return i;\
+            } \
+        } \
+        return 0; \
+    }
+
 // Get max of two scalars
 // Note that second type is casted to the first
 #ifndef max

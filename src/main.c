@@ -24,7 +24,7 @@ main (i32 argc, char **argv)
     g_state.type = GAME_STATE_BOOT;
     vulkan_renderer_init_state();
 
-    state_level_init();
+    level_init();
 
     //strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-Bb.map");
     strcpy(g_state.l.map_path, TAGAP_SCRIPT_DIR "/maps/Level_1-A.map");
@@ -133,7 +133,7 @@ main (i32 argc, char **argv)
             break;
         case GAME_STATE_LEVEL_LOAD:
             // Reset current level state
-            state_level_reset();
+            level_reset();
             vulkan_level_begin();
 
             // Load the level that is in the current level state
@@ -145,16 +145,16 @@ main (i32 argc, char **argv)
             }
 
             // Put something on the damn screen
-            state_level_submit_to_renderer();
+            level_submit_to_renderer();
 
-            state_level_spawn_entities();
+            level_spawn_entities();
 
             vulkan_level_end();
             tagap_set_state(GAME_STATE_LEVEL);
             break;
         case GAME_STATE_LEVEL:
             // Update the level
-            state_level_update();
+            level_update();
 
             // Update status line
             if (g_state.now - g_state.last_sec > NS_PER_SECOND)
@@ -179,7 +179,7 @@ main (i32 argc, char **argv)
     }
 game_quit:
 
-    state_level_deinit();
+    level_deinit();
     renderer_deinit();
 
     // Deinitialise SDL

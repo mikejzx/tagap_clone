@@ -39,18 +39,6 @@ static const char *ANIM_NAMES[] =
     [ANIM_WEAPON2]     = "ANIM_WEAPON2",
 };
 
-static inline enum tagap_anim
-lookup_tagap_anim(const char *a)
-{
-    for (u32 i = 0; i < ANIM_COUNT; ++i)
-    {
-        if (strcmp(a, ANIM_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    //LOG_WARN("[tagap_anim] lookup of animation '%s' yields nothing", a);
-    return ANIM_NONE;
-}
+CREATE_LOOKUP_FUNC(lookup_tagap_anim, ANIM_NAMES, ANIM_COUNT);
 
 #endif

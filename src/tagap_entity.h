@@ -6,10 +6,6 @@
 #define ENTITY_NAME_MAX 128
 #define ENTITY_MAX_SPRITES 32
 
-/*
- * TODO: create auto-generators for lookup_ functions
- */
-
 // Values that can be applied to entities
 enum tagap_entity_stat_id
 {
@@ -45,19 +41,7 @@ static const char *STAT_NAMES[] =
     [STAT_S_WEAPON]    = "S_WEAPON",
 };
 
-static inline enum tagap_entity_stat_id
-lookup_tagap_stat(const char *s)
-{
-    for (u32 i = 0; i < ENTITY_STAT_COUNT; ++i)
-    {
-        if (strcmp(s, STAT_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    //LOG_WARN("[tagap_think] lookup of STAT '%s' yields nothing", s);
-    return STAT_UNKNOWN;
-}
+CREATE_LOOKUP_FUNC(lookup_tagap_stat, STAT_NAMES, ENTITY_STAT_COUNT);
 
 enum tagap_entity_think_id
 {
@@ -72,7 +56,7 @@ enum tagap_entity_think_id
     THINK_AI_ZOMBIE,   // Zombie logic
 
     // NON-STANDARD IDS
-    THINK_AI_NETUSER,  // Network-player controlled
+    //THINK_AI_NETUSER,  // Network-player controlled
 
     THINK_COUNT,
 };
@@ -92,19 +76,28 @@ static const char *THINK_NAMES[] =
     //[THINK_AI_NETUSER]  = "AI_NETUSER",
 };
 
-static inline enum tagap_entity_think_id
-lookup_tagap_think(const char *t)
+CREATE_LOOKUP_FUNC(lookup_tagap_think, THINK_NAMES, THINK_COUNT);
+
+enum tagap_entity_think_attack_mode
 {
-    for (u32 i = 0; i < THINK_COUNT; ++i)
-    {
-        if (strcmp(t, THINK_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    LOG_WARN("[tagap_think] lookup of THINK '%s' yields nothing", t);
-    return THINK_NONE;
-}
+    THINK_ATTACK_NONE = 0,
+    THINK_ATTACK_AI_FIRE,
+    THINK_ATTACK_AI_BLOW,
+    THINK_ATTACK_MELEE,
+
+    THINK_ATTACK_COUNT,
+};
+
+static const char *THINK_ATTACK_NAMES[] =
+{
+    [THINK_ATTACK_NONE]    = "NONE",
+    [THINK_ATTACK_AI_FIRE] = "AI_FIRE",
+    [THINK_ATTACK_AI_BLOW] = "AI_BLOW",
+    [THINK_ATTACK_MELEE]   = "AI_MELEE",
+};
+
+CREATE_LOOKUP_FUNC(lookup_tagap_think_attack,
+    THINK_ATTACK_NAMES, THINK_ATTACK_COUNT);
 
 enum tagap_entity_movetype_id
 {
@@ -122,19 +115,7 @@ static const char *MOVETYPE_NAMES[] =
     [MOVETYPE_WALK] = "WALK",
 };
 
-static inline enum tagap_entity_movetype_id
-lookup_tagap_movetype(const char *m)
-{
-    for (u32 i = 0; i < MOVETYPE_COUNT; ++i)
-    {
-        if (strcmp(m, MOVETYPE_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    LOG_WARN("[tagap_movetype] lookup of MOVETYPE '%s' yields nothing", m);
-    return THINK_NONE;
-}
+CREATE_LOOKUP_FUNC(lookup_tagap_movetype, MOVETYPE_NAMES, MOVETYPE_COUNT);
 
 enum tagap_entity_offset_id
 {
@@ -168,19 +149,7 @@ static const char *OFFSET_NAMES[] =
     [OFFSET_WEAPON_ORIGIN] = "WEAPON_ORIGIN",
 };
 
-static inline enum tagap_entity_offset_id
-lookup_tagap_offset(const char *o)
-{
-    for (u32 i = 0; i < ENTITY_OFFSET_COUNT; ++i)
-    {
-        if (strcmp(o, OFFSET_NAMES[i]) == 0)
-        {
-            return i;
-        }
-    }
-    LOG_WARN("[tagap_movetype] lookup of OFFSET '%s' yields nothing", o);
-    return OFFSET_UNKNOWN;
-}
+CREATE_LOOKUP_FUNC(lookup_tagap_offset, OFFSET_NAMES, ENTITY_OFFSET_COUNT);
 
 // Info loaded once globally at start of game
 struct tagap_entity_info
@@ -200,8 +169,8 @@ struct tagap_entity_info
     {
         enum tagap_entity_think_id mode;
         f32 speed_mod;
-        //enum tagap_entity_think_attack_id attack;
-        f32 attack_speed;
+        enum tagap_entity_think_attack_mode attack;
+        f32 attack_delay;
     } think;
 
     // Movetype info
