@@ -294,7 +294,7 @@ entity_update(struct tagap_entity *e)
         // Head animation
         case ANIM_FACE:
         {
-            if (spr_rot  < 90.0f)
+            if (spr_rot < 90.0f)
             {
                 spr_rot = 30.0f * (e->aim_angle / 90.0f);
             }

@@ -4,6 +4,8 @@
 #include "tagap_linedef.h"
 #include "tagap_entity.h"
 #include "tagap_polygon.h"
+#include "tagap_layer.h"
+#include "tagap_trigger.h"
 #include "state_level.h"
 #include "renderer.h"
 #include "entity_pool.h"
@@ -24,6 +26,10 @@ level_init(void)
     g_map->linedef_count = 0;
     g_map->polygons = calloc(LEVEL_MAX_POLYGONS, sizeof(struct tagap_polygon));
     g_map->polygon_count = 0;
+    g_map->layers = calloc(LEVEL_MAX_LAYERS, sizeof(struct tagap_layer));
+    g_map->layer_count = 0;
+    g_map->triggers = calloc(LEVEL_MAX_TRIGGERS, sizeof(struct tagap_trigger));
+    g_map->trigger_count = 0;
     g_map->entities = malloc(LEVEL_MAX_ENTITIES * sizeof(struct tagap_entity));
     g_map->entity_count = 0;
     g_map->tmp_entities =
@@ -62,6 +68,8 @@ level_reset(void)
     g_map->title[0] = g_map->desc[0] = '\0';
     g_map->linedef_count = 0;
     g_map->polygon_count = 0;
+    g_map->trigger_count = 0;
+    g_map->layer_count = 0;
     g_map->entity_count = 0;
     g_map->tmp_entity_count = 0;
 
@@ -78,6 +86,8 @@ level_deinit(void)
     LOG_INFO("[state] level cleanup");
     free(g_map->linedefs);
     free(g_map->polygons);
+    free(g_map->triggers);
+    free(g_map->layers);
     free(g_map->entities);
     free(g_state.l.entity_infos);
     free(g_state.l.theme_infos);
@@ -90,11 +100,26 @@ level_deinit(void)
 void
 level_submit_to_renderer(void)
 {
-    // Polygons are rendered first so add them to the renderables list first
     i32 i;
+
+    // Render background layers first
+    for (i = 0; i < g_map->layer_count; ++i)
+    {
+        // TODO: use enum for rendering flags
+        if (g_map->layers[i].rendering_flag == 3) continue;
+        renderer_add_layer(&g_map->layers[i]);
+    }
+
+    // Polygons are rendered second
     for (i = 0; i < g_map->polygon_count; ++i)
     {
         renderer_add_polygon(&g_map->polygons[i]);
+    }
+
+    // Add any trigger renderers
+    for (i = 0; i < g_map->trigger_count; ++i)
+    {
+        renderer_add_trigger(&g_map->triggers[i]);
     }
 
     // Finally generate line geometry.
@@ -144,6 +169,20 @@ level_update()
     }
     // Update pooled entities
     entity_pool_update();
+
+    // Update background layer positions
+    for (u32 i = 0; i < g_map->layer_count; ++i)
+    {
+        // TODO: enum for this
+        if (g_map->layers[i].rendering_flag == 3) continue;
+        g_map->layers[i].r->pos = (vec2s)
+        {
+            g_state.cam_pos.x,
+            g_state.cam_pos.y + 
+                g_vulkan->textures[g_map->layers[i].r->tex].h +
+                g_map->layers[i].offset_y,
+        };
+    }
 }
 
 /*

@@ -18,13 +18,16 @@ layout(push_constant) uniform constants
     // white
     vec4 shading;
 
+    // Texture offset
+    vec2 tex_offset;
+
     // Index of the texture this thing uses
     int tex_index;
 } pconsts;
 
 void main()
 {
-    v_Texcoord = a_Texcoord;
+    v_Texcoord = a_Texcoord + pconsts.tex_offset;
     gl_Position = pconsts.mvp * vec4(a_Position, 0.0, 1.0);
     v_Shading = pconsts.shading;
     v_TexIndex = pconsts.tex_index;

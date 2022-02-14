@@ -55,6 +55,8 @@ enum tagap_script_atom_id
     ATOM_STAT,
     ATOM_GUNENTITY,
     ATOM_WEAPON,
+    ATOM_LAYER,
+    ATOM_TRIGGER,
 
     // (internal) Number of atoms we implement
     _ATOM_COUNT
@@ -392,6 +394,59 @@ TAGAP_SCRIPT_COMMANDS[] =
             { .type = TSCRIPT_TOKEN_ENTITY },
             // #4: weapon display nmae
             { .type = TSCRIPT_TOKEN_STRING, .length = WEAPON_DISPLAY_NAME_MAX },
+        },
+    },
+    // Defines a layer
+    [ATOM_LAYER] =
+    {
+        .name = "LAYER",
+        .token_count = 6,
+        .tokens = 
+        {
+            // #1: scroll speed multiplier
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #2: Y-axis offset from top of screen
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #3: X-wise movement speed
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #4: Y-wise movement speed
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #5: texture name (hidden data/art/layers prefix)
+            { .type = TSCRIPT_TOKEN_STRING, .length = LAYER_TEX_NAME_MAX },
+            // #6: in-game rendering flag (???)
+            { .type = TSCRIPT_TOKEN_INT },
+        },
+    },
+    // Defines a trigger region
+    [ATOM_TRIGGER] =
+    {
+        .name = "TRIGGER",
+        .token_count = 9,
+        .tokens =
+        {
+            // #1/2: region top left X and Y coordinates
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #3/4: region bottom right X and Y coordinates
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            { .type = TSCRIPT_TOKEN_FLOAT },
+            // #5: target index reference or modifer value
+            { .type = TSCRIPT_TOKEN_INT },
+            // #6: trigger name
+            { 
+                .type = TSCRIPT_TOKEN_LOOKUP,
+                .lookup_func = lookup_tagap_trigger
+            },
+            // #7: trigger string
+            { .type = TSCRIPT_TOKEN_STRING, .length = 32 },
+            // #8: link class
+            { 
+                .type = TSCRIPT_TOKEN_STRING, .length = 32,
+                //.type = TSCRIPT_TOKEN_LOOKUP, 
+                //.lookup_func = lookup_tagap_link_class
+            },
+            // #9: additional variable value
+            { .type = TSCRIPT_TOKEN_INT, },
         },
     },
 };

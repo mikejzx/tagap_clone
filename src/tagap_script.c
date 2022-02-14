@@ -5,8 +5,10 @@
 #include "tagap_linedef.h"
 #include "tagap_sprite.h"
 #include "tagap_polygon.h"
-#include "tagap_script.h"
 #include "tagap_theme.h"
+#include "tagap_layer.h"
+#include "tagap_trigger.h"
+#include "tagap_script.h"
 
 #include "tagap_script_def.h"
 
@@ -652,6 +654,47 @@ tagap_script_run_cmd_in_state(
         strcpy(w->display_name, ss->tok[3].str);
         w->primary = ss->tok[1].e;
         w->secondary = ss->tok[2].e;
+    } break;
+
+    // Sets a static layer in the level
+    case ATOM_LAYER:
+    {
+        if (g_map->layer_count + 1 >= LEVEL_MAX_LAYERS)
+        {
+            SCRIPT_ERROR("LAYER: limit (%d) exceeded", LEVEL_MAX_LAYERS);
+            return -1;
+        }
+
+        struct tagap_layer *l = &g_map->layers[g_map->layer_count++];
+        *l = (struct tagap_layer)
+        {
+            .scroll_speed_mul = ss->tok[0].f,
+            .offset_y = ss->tok[1].f,
+            .movement_speed = (vec2s) { ss->tok[2].f, ss->tok[3].f },
+            .rendering_flag = ss->tok[5].i,
+        };
+        strcpy(l->tex_name, ss->tok[4].str);
+    } break;
+
+    // Sets up a trigger in the level
+    case ATOM_TRIGGER:
+    {
+        if (g_map->trigger_count + 1 >= LEVEL_MAX_TRIGGERS)
+        {
+            SCRIPT_ERROR("TRIGGER: limit (%d) exceeded", LEVEL_MAX_TRIGGERS);
+            return -1;
+        }
+
+        struct tagap_trigger *t = &g_map->triggers[g_map->trigger_count++];
+        *t = (struct tagap_trigger)
+        {
+            .corner_tl.x = ss->tok[0].f,
+            .corner_tl.y = ss->tok[1].f,
+            .corner_br.x = ss->tok[2].f,
+            .corner_br.y = ss->tok[3].f,
+            .target_index = ss->tok[4].i,
+            .id = ss->tok[5].i,
+        };
     } break;
 
     default: break;

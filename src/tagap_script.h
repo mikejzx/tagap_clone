@@ -3,7 +3,7 @@
 
 #include "types.h"
 
-#define TAGAP_SCRIPT_MAX_TOKENS 8
+#define TAGAP_SCRIPT_MAX_TOKENS 10
 #define TAGAP_SCRIPT_STRING_TOKEN_MAX 256
 
 enum tagap_script_token_type

@@ -2,6 +2,9 @@
 #include "renderer.h"
 #include "tagap.h"
 #include "tagap_polygon.h"
+#include "tagap_linedef.h"
+#include "tagap_layer.h"
+#include "tagap_trigger.h"
 #include "vulkan_renderer.h"
 
 struct renderer g_renderer;
@@ -299,34 +302,60 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
     }
 }
 
-struct renderable *
-renderer_get_renderable_quad(void)
+/*
+ * Add a layer to the renderer
+ */
+void
+renderer_add_layer(struct tagap_layer *l)
 {
-    struct renderable *r = renderer_get_renderable();
-    if (!r) return NULL;
+    // Load layer texture
+    char texpath[256];
+    sprintf(texpath, "%s/%s.tga", TAGAP_LAYERS_DIR, l->tex_name);
+    i32 tex_index = vulkan_texture_load(texpath);
+    if (tex_index < 0)
+    {
+        LOG_WARN("[renderer] can't add layer; couldn't load texture '%s'",
+            texpath);
+        return;
+    }
 
-    // Simple quad vertices and indices
-    static const f32 w = 0.5f, h = 0.5f;
-    static const struct vertex vertices[4] =
+    // Get renderable
+    struct renderable *r = renderer_get_renderable();
+    l->r = r;
+
+    // Set texture
+    r->tex = tex_index;
+    vec2s tex_size = 
+    {
+        (f32)g_vulkan->textures[tex_index].w,
+        (f32)g_vulkan->textures[tex_index].h,
+    };
+    r->is_shaded = true;
+    r->no_cull = true;
+    r->parallax = l->scroll_speed_mul;
+
+    f32 w = WIDTH_INTERNAL; 
+    f32 h = tex_size.y;
+    struct vertex vertices[4] =
     {
         // Top left
         {
-            .pos      = (vec2s) { -w, h },
+            .pos      = (vec2s) { 0.0f, h },
             .texcoord = (vec2s) { 0.0f, 0.0f, },
         },
         // Top right
         {
             .pos      = (vec2s) { w, h },
-            .texcoord = (vec2s) { 1.0f, 0.0f, },
+            .texcoord = (vec2s) { w / tex_size.x, 0.0f, },
         },
         // Bottom right
         {
-            .pos      = (vec2s) { w, -h },
-            .texcoord = (vec2s) { 1.0f, 1.0f, },
+            .pos      = (vec2s) { w, 0.0f },
+            .texcoord = (vec2s) { w / tex_size.x, 1.0f, },
         },
         // Bottom left
         {
-            .pos      = (vec2s) { -w, -h },
+            .pos      = (vec2s) { 0.0f, 0.0f },
             .texcoord = (vec2s) { 0.0f, 1.0f, },
         },
     };
@@ -338,7 +367,131 @@ renderer_get_renderable_quad(void)
 
     vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
     ib_new(&r->ib, indices, 3 * 4 * sizeof(u16));
+}
+
+/*
+ * Add any trigger renderers (if any)
+ */
+void
+renderer_add_trigger(struct tagap_trigger *t)
+{
+    switch (t->id)
+    {
+    /* Trigger renders a layer */
+    case TRIGGER_LAYER:
+    {
+        struct tagap_layer *l = NULL;
+        if (t->target_index < 0 || t->target_index >= g_map->layer_count)
+        {
+            LOG_WARN("[renderer] trigger with id 'layer' has invalid target");
+            break;
+        }
+        l = &g_map->layers[t->target_index];
+
+        // Load layer texture
+        char texpath[256];
+        sprintf(texpath, "%s/%s.tga", TAGAP_LAYERS_DIR, l->tex_name);
+        i32 tex_index = vulkan_texture_load(texpath);
+        if (tex_index < 0)
+        {
+            LOG_WARN("[renderer] can't render layer; no texture '%s'", texpath);
+            return;
+        }
+        f32 w = g_vulkan->textures[tex_index].w,
+            h = g_vulkan->textures[tex_index].h;
+
+        // Create the quad
+        struct renderable *r = renderer_get_renderable_quad_dim(w, h, false);
+        r->tex = tex_index;
+        r->pos.x = t->corner_tl.x;
+        r->pos.y = -t->corner_br.y;
+
+        r->bounds.min.x = 0.0f;
+        r->bounds.max.x = w;
+        r->bounds.min.y = 0.0f;
+        r->bounds.max.y = h;
+    } break;
+
+    default: break;
+    }
+}
+
+struct renderable *
+renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre)
+{
+    struct renderable *r = renderer_get_renderable();
+    if (!r) return NULL;
+
+    struct vertex vertices[4];
+    if (centre)
+    {
+        // Top left
+        vertices[0] = (struct vertex)
+        {
+            .pos      = (vec2s) { -w, h },
+            .texcoord = (vec2s) { 0.0f, 0.0f, },
+        };
+        // Top right
+        vertices[1] = (struct vertex)
+        {
+            .pos      = (vec2s) { w, h },
+            .texcoord = (vec2s) { 1.0f, 0.0f, },
+        };
+        // Bottom right
+        vertices[2] = (struct vertex)
+        {
+            .pos      = (vec2s) { w, -h },
+            .texcoord = (vec2s) { 1.0f, 1.0f, },
+        };
+        // Bottom left
+        vertices[3] = (struct vertex)
+        {
+            .pos      = (vec2s) { -w, -h },
+            .texcoord = (vec2s) { 0.0f, 1.0f, },
+        };
+    }
+    else
+    {
+        // Top left
+        vertices[0] = (struct vertex)
+        {
+            .pos      = (vec2s) { 0.0f, h },
+            .texcoord = (vec2s) { 0.0f, 0.0f, },
+        };
+        // Top right
+        vertices[1] = (struct vertex)
+        {
+            .pos      = (vec2s) { w, h },
+            .texcoord = (vec2s) { 1.0f, 0.0f, },
+        };
+        // Bottom right
+        vertices[2] = (struct vertex)
+        {
+            .pos      = (vec2s) { w, 0.0f },
+            .texcoord = (vec2s) { 1.0f, 1.0f, },
+        };
+        // Bottom left
+        vertices[3] = (struct vertex)
+        {
+            .pos      = (vec2s) { 0.0f, 0.0f },
+            .texcoord = (vec2s) { 0.0f, 1.0f, },
+        };
+    }
+    static const u16 indices[3 * 4] =
+    {
+        0, 1, 2,
+        0, 2, 3
+    };
+
+    vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
+    ib_new(&r->ib, indices, 3 * 4 * sizeof(u16));
 
     return r;
+}
+
+struct renderable *
+renderer_get_renderable_quad(void)
+{
+    return renderer_get_renderable_quad_dim(0.5f, 0.5f, true);
 }
 

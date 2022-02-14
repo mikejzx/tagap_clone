@@ -9,9 +9,11 @@
 //#define TAGAP_DATA_DIR "/home/mike/games/TAGAP/data"
 #define TAGAP_DATA_DIR "./data"
 #define TAGAP_DATA_MOD_DIR "./data_add"
+#define TAGAP_ART_DIR TAGAP_DATA_DIR "/art"
 #define TAGAP_SCRIPT_DIR TAGAP_DATA_DIR "/script"
-#define TAGAP_TEXTURES_DIR "./data/art/textures"
-#define TAGAP_SPRITES_DIR "./data/art/sprites"
+#define TAGAP_TEXTURES_DIR TAGAP_ART_DIR "/textures"
+#define TAGAP_SPRITES_DIR TAGAP_ART_DIR "/sprites"
+#define TAGAP_LAYERS_DIR TAGAP_ART_DIR "/layers"
 
 enum game_state
 {

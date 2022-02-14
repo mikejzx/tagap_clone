@@ -18,6 +18,8 @@
 // Hard-coded constants for now
 #define LEVEL_MAX_LINEDEFS 512
 #define LEVEL_MAX_POLYGONS 512
+#define LEVEL_MAX_LAYERS 32
+#define LEVEL_MAX_TRIGGERS 128
 #define LEVEL_MAX_ENTITIES 1024
 #define LEVEL_MAX_TMP_ENTITIES 256
 #define GAME_ENTITY_INFO_LIMIT 1024
@@ -45,6 +47,14 @@ struct state_level
         struct tagap_polygon *polygons;
         i32 polygon_count;
 
+        // Level layers
+        struct tagap_layer *layers;
+        i32 layer_count;
+
+        // Level triggers
+        struct tagap_trigger *triggers;
+        i32 trigger_count;
+
         // Entities that have been added into the level initially
         struct tagap_entity *entities;
         i32 entity_count;
@@ -55,8 +65,6 @@ struct state_level
 
         // Level theme
         struct tagap_theme_info *theme;
-        
-        // TODO: pooled entities
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are

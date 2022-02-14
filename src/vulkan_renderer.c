@@ -65,6 +65,7 @@ struct push_constants
 {
     mat4s mvp;
     vec4s shading;
+    vec2s tex_offset;
     int tex_index;
 };
 
@@ -1033,7 +1034,7 @@ vulkan_record_command_buffers(
     }
 
     // Configure render pass
-    static const VkClearValue clear_colour = {{{ 0.05f, 0.05f, 0.05f, 1.0f }}};
+    static const VkClearValue clear_colour = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}};
     VkRenderPassBeginInfo render_pass_info =
     {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1191,6 +1192,12 @@ vulkan_record_command_buffers(
                      [THEME_AFFECT_WORLD][THEME_STATE_BASE].z * dim,
                  1.0f,
             }},
+            .tex_offset = (vec2s)
+            { 
+                // Apply parallax background effects
+                objs[o].parallax * (cam_pos.x / WIDTH_INTERNAL) * 0.5f,
+                0.0f 
+            },
             .tex_index = objs[o].tex,
         };
         vkCmdPushConstants(cbuf,
