@@ -19,8 +19,18 @@
  *   the renderer
  */
 
-#define WIDTH 800
-#define HEIGHT 600
+//#define WIDESCREEN
+#ifndef WIDESCREEN
+#  define WIDTH 800 //1440
+#  define HEIGHT 600 //1080
+#  define WIDTH_INTERNAL 800
+#  define HEIGHT_INTERNAL 600
+#else
+#  define WIDTH 1920
+#  define HEIGHT 1080
+#  define WIDTH_INTERNAL 1067
+#  define HEIGHT_INTERNAL 600
+#endif
 
 #define MAX_TEXTURES 128
 

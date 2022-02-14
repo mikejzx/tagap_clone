@@ -86,6 +86,7 @@ renderer_add_polygon(struct tagap_polygon *p)
         (f32)g_vulkan->textures[tex_index].w,
         (f32)g_vulkan->textures[tex_index].h,
     };
+    r->is_shaded = p->tex_is_shaded;
 
     r->bounds.min.x = FLT_MAX;
     r->bounds.min.y = FLT_MAX;
@@ -169,6 +170,10 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         for (i = 0; i < lc; ++i)
         {
             if (ldefs[i].style != info->style) continue;
+
+            // Skip vertical lines (walls)
+            if (ldefs[i].start.x == ldefs[i].end.x) continue;
+
             info->v_size += 4 * sizeof(struct vertex);
             info->i_size += 6 * sizeof(u16);
         }
@@ -202,6 +207,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         {
             struct tagap_linedef *l = &ldefs[i];
             if (l->style != info->style) continue;
+            if (ldefs[i].start.x == ldefs[i].end.x) continue;
 
             // Length of the line
             f32 llen = glms_vec2_distance(l->start, l->end);
@@ -292,3 +298,47 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         free(info->i);
     }
 }
+
+struct renderable *
+renderer_get_renderable_quad(void)
+{
+    struct renderable *r = renderer_get_renderable();
+    if (!r) return NULL;
+
+    // Simple quad vertices and indices
+    static const f32 w = 0.5f, h = 0.5f;
+    static const struct vertex vertices[4] =
+    {
+        // Top left
+        {
+            .pos      = (vec2s) { -w, h },
+            .texcoord = (vec2s) { 0.0f, 0.0f, },
+        },
+        // Top right
+        {
+            .pos      = (vec2s) { w, h },
+            .texcoord = (vec2s) { 1.0f, 0.0f, },
+        },
+        // Bottom right
+        {
+            .pos      = (vec2s) { w, -h },
+            .texcoord = (vec2s) { 1.0f, 1.0f, },
+        },
+        // Bottom left
+        {
+            .pos      = (vec2s) { -w, -h },
+            .texcoord = (vec2s) { 0.0f, 1.0f, },
+        },
+    };
+    static const u16 indices[3 * 4] =
+    {
+        0, 1, 2,
+        0, 2, 3
+    };
+
+    vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
+    ib_new(&r->ib, indices, 3 * 4 * sizeof(u16));
+
+    return r;
+}
+

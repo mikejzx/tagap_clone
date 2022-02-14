@@ -58,6 +58,8 @@ main (i32 argc, char **argv)
         g_state.last_frame = g_state.now;
         g_state.dt = (f64)frame_delta / NS_PER_SECOND;
 
+        g_state.mouse_scroll = 0;
+
         // Poll inputs
         static bool buttons[4] = { 0, 0, 0, 0 };
         while (SDL_PollEvent(&event))
@@ -87,6 +89,13 @@ main (i32 argc, char **argv)
                 default: break;
                 }
             } break;
+
+            // Mouse scrollwheel
+            case SDL_MOUSEWHEEL:
+            {
+                g_state.mouse_scroll = event.wheel.y;
+            } break;
+
             case SDL_QUIT:
                 goto game_quit;
             default:

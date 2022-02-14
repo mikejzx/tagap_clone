@@ -40,7 +40,7 @@ struct tagap
 
     // Current client-side input/state info
     vec3s cam_pos;
-    i32 mouse_x, mouse_y;
+    i32 mouse_x, mouse_y, mouse_scroll;
     u8 m_state;
     const u8 *kb_state;
 

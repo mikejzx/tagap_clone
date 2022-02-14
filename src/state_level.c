@@ -6,6 +6,7 @@
 #include "tagap_polygon.h"
 #include "state_level.h"
 #include "renderer.h"
+#include "entity_pool.h"
 
 struct level *g_map;
 struct state_level *g_level;
@@ -72,6 +73,8 @@ level_reset(void)
 void
 level_deinit(void)
 {
+    entity_pool_deinit();
+
     LOG_INFO("[state] level cleanup");
     free(g_map->linedefs);
     free(g_map->polygons);
@@ -106,6 +109,19 @@ level_spawn_entities()
 {
     for (u32 i = 0; i < g_map->entity_count; ++i)
     {
+        // Spawn non-user things first
+        if (g_map->entities[i].info->think.mode == THINK_AI_USER) continue;
+        entity_spawn(&g_map->entities[i]);
+    }
+
+    // Spawn the pooled entities
+    entity_pool_init();
+
+    // Spawn user themself last
+    for (u32 i = 0; i < g_map->entity_count; ++i)
+    {
+        // Spawn non-user things first
+        if (g_map->entities[i].info->think.mode != THINK_AI_USER) continue;
         entity_spawn(&g_map->entities[i]);
     }
 }
@@ -126,6 +142,26 @@ level_update()
 
         entity_update(&g_map->tmp_entities[i]);
     }
+    // Update pooled entities
+    entity_pool_update();
+}
+
+/*
+ * Adds an entity to the entity list
+ */
+struct tagap_entity *
+level_add_entity(struct tagap_entity_info *info)
+{
+    if (g_map->entity_count + 1 >= LEVEL_MAX_ENTITIES)
+    {
+        LOG_ERROR("[state_level]: entity limit (%d) exceeded", 
+            LEVEL_MAX_ENTITIES);
+        return NULL;
+    }
+    struct tagap_entity *e = &g_map->entities[g_map->entity_count++];
+    memset(e, 0, sizeof(struct tagap_entity));
+    e->info = info;
+    return e;
 }
 
 /*

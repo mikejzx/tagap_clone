@@ -1077,11 +1077,11 @@ vulkan_record_command_buffers(
                 .min = (vec2s)
                 {{
                     cam_pos.x,
-                    -cam_pos.y - HEIGHT,
+                    -cam_pos.y - HEIGHT_INTERNAL,
                 }},
                 .max = (vec2s)
                 {{
-                    cam_pos.x + WIDTH,
+                    cam_pos.x + WIDTH_INTERNAL,
                     -cam_pos.y,
                 }},
             };
@@ -1173,20 +1173,22 @@ vulkan_record_command_buffers(
         m_v = glms_translate(m_v,
             (vec3s){ -cam_pos.x, -cam_pos.y, 0.0f });
         mat4s m_p = glms_ortho(
-            0.0f, 800,
-            0.0f, 600,
+            0.0f, WIDTH_INTERNAL,
+            0.0f, HEIGHT_INTERNAL,
             -1.0f, 1.0f);
+        static const f32 DARKNESS = 0.65f;
+        f32 dim = (objs[o].is_shaded ? 0.70f : 1.0f) * DARKNESS;
         const struct push_constants pconsts =
         {
             .mvp = glms_mat4_mul(m_p, glms_mat4_mul(m_v, m_m)),
             .shading = (vec4s)
             {{
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].x,
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].x * dim,
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].y,
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].y * dim,
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].z,
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].z * dim,
                  1.0f,
             }},
             .tex_index = objs[o].tex,

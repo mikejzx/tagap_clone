@@ -2,9 +2,14 @@
 #define TAGAP_ENTITY_H
 
 #include "tagap_sprite.h"
+#include "tagap_entity_think.h"
+#include "tagap_entity_movetype.h"
+#include "collision.h"
+#include "entity_pool.h"
 
 #define ENTITY_NAME_MAX 128
 #define ENTITY_MAX_SPRITES 32
+#define PLAYER_WEAPON_COUNT 10
 
 // Values that can be applied to entities
 enum tagap_entity_stat_id
@@ -20,7 +25,7 @@ enum tagap_entity_stat_id
     STAT_TEMPMISSILE,
 
     // FX stats
-    // ...
+    STAT_FX_RENDERFIRST,
 
     // S_ stats
     STAT_S_AKIMBO,
@@ -32,90 +37,17 @@ enum tagap_entity_stat_id
 
 static const char *STAT_NAMES[] =
 {
-    [STAT_UNKNOWN]     = "",
-    [STAT_CHARGE]      = "CHARGE",
-    [STAT_DAMAGE]      = "DAMAGE",
-    [STAT_TEMPMISSILE] = "TEMPMISSILE",
-    [STAT_S_AKIMBO]    = "S_AKIMBO",
-    [STAT_S_HEALTH]    = "S_HEALTH",
-    [STAT_S_WEAPON]    = "S_WEAPON",
+    [STAT_UNKNOWN]        = "",
+    [STAT_CHARGE]         = "CHARGE",
+    [STAT_DAMAGE]         = "DAMAGE",
+    [STAT_TEMPMISSILE]    = "TEMPMISSILE",
+    [STAT_FX_RENDERFIRST] = "FX_RENDERFIRST",
+    [STAT_S_AKIMBO]       = "S_AKIMBO",
+    [STAT_S_HEALTH]       = "S_HEALTH",
+    [STAT_S_WEAPON]       = "S_WEAPON",
 };
 
 CREATE_LOOKUP_FUNC(lookup_tagap_stat, STAT_NAMES, ENTITY_STAT_COUNT);
-
-enum tagap_entity_think_id
-{
-    THINK_NONE = 0,
-    THINK_AI_AIM,      // Aim at player
-    THINK_AI_CONSTANT, // Constant distance to leader
-    THINK_AI_FOLLOW,   // Follow player
-    THINK_AI_ITEM,     // Is an item
-    THINK_AI_MISSILE,  // Weapon projectile
-    THINK_AI_USER,     // Player controlled,
-    THINK_AI_WANDER,   // Wandering entity
-    THINK_AI_ZOMBIE,   // Zombie logic
-
-    // NON-STANDARD IDS
-    //THINK_AI_NETUSER,  // Network-player controlled
-
-    THINK_COUNT,
-};
-
-static const char *THINK_NAMES[] =
-{
-    [THINK_NONE]        = "NONE",
-    [THINK_AI_AIM]      = "AI_AIM",
-    [THINK_AI_CONSTANT] = "AI_CONSTANT",
-    [THINK_AI_FOLLOW]   = "AI_FOLLOW",
-    [THINK_AI_ITEM]     = "AI_ITEM",
-    [THINK_AI_MISSILE]  = "AI_MISSILE",
-    [THINK_AI_USER]     = "AI_USER",
-    [THINK_AI_WANDER]   = "AI_WANDER",
-    [THINK_AI_ZOMBIE]   = "AI_ZOMBIE",
-
-    //[THINK_AI_NETUSER]  = "AI_NETUSER",
-};
-
-CREATE_LOOKUP_FUNC(lookup_tagap_think, THINK_NAMES, THINK_COUNT);
-
-enum tagap_entity_think_attack_mode
-{
-    THINK_ATTACK_NONE = 0,
-    THINK_ATTACK_AI_FIRE,
-    THINK_ATTACK_AI_BLOW,
-    THINK_ATTACK_MELEE,
-
-    THINK_ATTACK_COUNT,
-};
-
-static const char *THINK_ATTACK_NAMES[] =
-{
-    [THINK_ATTACK_NONE]    = "NONE",
-    [THINK_ATTACK_AI_FIRE] = "AI_FIRE",
-    [THINK_ATTACK_AI_BLOW] = "AI_BLOW",
-    [THINK_ATTACK_MELEE]   = "AI_MELEE",
-};
-
-CREATE_LOOKUP_FUNC(lookup_tagap_think_attack,
-    THINK_ATTACK_NAMES, THINK_ATTACK_COUNT);
-
-enum tagap_entity_movetype_id
-{
-    MOVETYPE_NONE = 0, // Static entity
-    MOVETYPE_FLY,      // Flying/floating movement
-    MOVETYPE_WALK,     // Affected by gravity
-
-    MOVETYPE_COUNT,
-};
-
-static const char *MOVETYPE_NAMES[] =
-{
-    [MOVETYPE_NONE] = "NONE",
-    [MOVETYPE_FLY]  = "FLY",
-    [MOVETYPE_WALK] = "WALK",
-};
-
-CREATE_LOOKUP_FUNC(lookup_tagap_movetype, MOVETYPE_NAMES, MOVETYPE_COUNT);
 
 enum tagap_entity_offset_id
 {
@@ -156,6 +88,9 @@ struct tagap_entity_info
 {
     char name[ENTITY_NAME_MAX];
 
+    // Pool in which this entity belongs
+    enum entity_pool_id pool_id;
+
     // List of sprite infos this entity uses, and the particular quirks applied
     // to them on this particular entityy
     struct tagap_entity_sprite sprites[ENTITY_MAX_SPRITES];
@@ -165,20 +100,10 @@ struct tagap_entity_info
     i32 stats[ENTITY_STAT_COUNT];
 
     // AI routine info
-    struct tagap_entity_think
-    {
-        enum tagap_entity_think_id mode;
-        f32 speed_mod;
-        enum tagap_entity_think_attack_mode attack;
-        f32 attack_delay;
-    } think;
+    struct tagap_entity_think think;
 
     // Movetype info
-    struct tagap_entity_movetype
-    {
-        enum tagap_entity_movetype_id type;
-        f32 speed;
-    } move;
+    struct tagap_entity_movetype move;
 
     // Collider size
     // It seems like X-value is only useful one here for some reason
@@ -187,6 +112,11 @@ struct tagap_entity_info
 
     // GUNENTITY for weapon entity
     struct tagap_entity_info *gun_entity;
+
+    // Whether this entity has a weapon
+    bool has_weapon;
+
+    // NOTE: make sure to add any new members to entity_info_clone!
 };
 
 // Copy info from @b to @a
@@ -196,8 +126,13 @@ entity_info_clone(
     struct tagap_entity_info *b,
     bool skip_name)
 {
+    // Skip names if needed
     if (!skip_name) strcpy(a->name, b->name);
 
+    // DO NOT COPY:
+    // * Pool ID
+
+    // Copy all data
     memcpy(a->sprites, b->sprites,
         ENTITY_MAX_SPRITES * sizeof(struct tagap_entity_sprite));
     a->sprite_count = b->sprite_count;
@@ -205,6 +140,8 @@ entity_info_clone(
     memcpy(&a->think, &b->think, sizeof(struct tagap_entity_think));
     memcpy(&a->move, &b->move, sizeof(struct tagap_entity_movetype));
     memcpy(a->offsets, b->offsets, ENTITY_OFFSET_COUNT * sizeof(vec2s));
+    a->gun_entity = b->gun_entity;
+    a->has_weapon = b->has_weapon;
 }
 
 struct tagap_entity
@@ -242,12 +179,15 @@ struct tagap_entity
         f32 horiz_smooth,
             vert_smooth;
 
-        // Whether to fire weapon
+        // Whether to fire weapon.
         bool fire;
     } inputs;
 
     // Normalised velocity
     vec2s velo;
+
+    // Collision info
+    struct collision_result collision;
 
     // Used for bobbing sprites
     f32 bobbing_timer, bobbing_timer_last;
@@ -274,11 +214,25 @@ struct tagap_entity
     u32 pool_count;
     // Pooled object info
     bool pooled;
+
+    // Weapon info
+    // Slot 0 does not have ammo (in the game it defines the clip size)
+    struct
+    {
+        u16 ammo;
+        struct tagap_entity *gunent;
+    } weapons[PLAYER_WEAPON_COUNT];
+    i32 weapon_slot;
+    f32 weapon_kick_timer;
 };
 
 void entity_spawn(struct tagap_entity *);
 void entity_update(struct tagap_entity *);
 void entity_free(struct tagap_entity *);
+void entity_die(struct tagap_entity *);
+void entity_reset(struct tagap_entity *, vec2s, f32, bool);
+void entity_set_inactive_hidden(struct tagap_entity *, bool);
+void entity_change_weapon_slot(struct tagap_entity *, i32);
 
 inline i32
 entity_get_rot(struct tagap_entity *e)

@@ -17,8 +17,11 @@
 
 struct renderable
 {
+    // TODO: bitmask for booleans
+
     bool hidden;
     bool tex_scale;
+    bool is_shaded;
     struct vbuffer vb;
     struct ibuffer ib;
     i32 tex;
@@ -49,6 +52,7 @@ void renderer_render(vec3s);
 void renderer_deinit(void);
 
 struct renderable *renderer_get_renderable(void);
+struct renderable *renderer_get_renderable_quad(void);
 void renderer_add_polygon(struct tagap_polygon *);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);
 

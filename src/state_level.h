@@ -55,6 +55,8 @@ struct state_level
 
         // Level theme
         struct tagap_theme_info *theme;
+        
+        // TODO: pooled entities
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are
@@ -89,6 +91,8 @@ void level_deinit(void);
 void level_submit_to_renderer(void);
 void level_spawn_entities(void);
 void level_update(void);
+
+struct tagap_entity *level_add_entity(struct tagap_entity_info *);
 
 struct tagap_entity *level_spawn_entity(
     struct tagap_entity_info *ei,

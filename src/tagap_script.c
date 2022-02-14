@@ -154,9 +154,9 @@ tagap_script_parse_cmd(
         for (;(tmpptr = strchr(tmpptr, ' ')) != NULL; ++tok_count, ++tmpptr);
         if (tok_count < min_tok_count)
         {
-            LOG_ERROR("[tagap_script] parse fail: "
-                "token count (%d) does not meet minimum of %d tokens",
-                tok_count, min_tok_count);
+            SCRIPT_ERROR("parse fail: token count (%d) does not meet "
+                "minimum of %d tokens (%s)",
+                tok_count, min_tok_count, cmd.name);
             return -1;
         }
     }
@@ -254,7 +254,7 @@ tagap_script_parse_cmd(
                 if (strcmp(e->name, token) == 0)
                 {
                     v->e = e;
-                    LOG_SCRIPT("found info for entity %s", token);
+                    //LOG_SCRIPT("found info for entity %s", token);
                     break;
                 }
             }
@@ -378,8 +378,7 @@ tagap_script_run_cmd_in_state(
         *p = (struct tagap_polygon)
         {
             .tex_offset_point = ss->tok[1].i,
-            .tex_is_shaded = ss->tok[2].i,
-            .tex_is_shaded = ss->tok[3].i,
+            .tex_is_shaded = ss->tok[2].b,
             .point_count = 0,
         };
         strcpy(p->tex_name, ss->tok[0].str);
@@ -455,23 +454,20 @@ tagap_script_run_cmd_in_state(
     // Spawn an entity into the world
     case ATOM_ENTITY_SET:
     {
-        if (g_map->entity_count + 1 >= LEVEL_MAX_ENTITIES)
-        {
-            SCRIPT_ERROR("ENTITY_SET: limit (%d) exceeded", LEVEL_MAX_ENTITIES);
-            return -1;
-        }
         if (ss->tok[0].e == NULL)
         {
             SCRIPT_WARN("ENTITY_SET: parsed entity is null");
             return -1;
         }
-        g_map->entities[g_map->entity_count++] = (struct tagap_entity)
+        struct tagap_entity *e = level_add_entity(ss->tok[0].e);
+        if (!e)
         {
-            .info = ss->tok[0].e,
-            .position = (vec2s){ (f32)ss->tok[1].i, (f32)ss->tok[2].i },
-            .aim_angle = (f32)ss->tok[3].i,
-            .active = !ss->tok[4].b,
-        };
+            SCRIPT_ERROR("ENTITY_SET: failed to add entity");
+            return -1;
+        }
+        e->position = (vec2s){ (f32)ss->tok[1].i, (f32)ss->tok[2].i };
+        e->aim_angle = (f32)ss->tok[3].i;
+        e->active = !ss->tok[4].b;
     } break;
 
     // Clone entity info
@@ -623,6 +619,13 @@ tagap_script_run_cmd_in_state(
         else
         {
             e->stats[ss->tok[0].i] = ss->tok[1].i;
+
+            // Special case: for S_WEAPON we indicate that the entity indeed
+            // has a weapon
+            if (ss->tok[0].i == STAT_S_WEAPON)
+            {
+                e->has_weapon = true;
+            }
         }
     } break;
 

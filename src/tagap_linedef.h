@@ -13,13 +13,13 @@ enum tagap_linedef_style
     LINEDEF_STYLE_FLOOR = 0,
 
     // "ceiling or facing right"
-    LINEDEF_STYLE_CEIL = 1,
+    LINEDEF_STYLE_CEILING = 1,
 
     // "plate floor"
     LINEDEF_STYLE_PLATE_FLOOR = 2,
 
     // "plate ceiling"
-    LINEDEF_STYLE_PLATE_CEIL = 3,
+    LINEDEF_STYLE_PLATE_CEILING = 3,
 };
 
 struct tagap_linedef
