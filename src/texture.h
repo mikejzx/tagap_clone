@@ -13,7 +13,4 @@ struct texture
     u32 w, h, bpp;
 };
 
-i32 texture_load(const char *, struct texture *);
-void texture_free(struct texture *);
-
 #endif

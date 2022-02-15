@@ -65,6 +65,9 @@ struct state_level
 
         // Level theme
         struct tagap_theme_info *theme;
+
+        // Current depth amount in the level
+        u32 current_depth;
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are

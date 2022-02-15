@@ -81,6 +81,11 @@ struct vulkan_renderer
     VkDescriptorImageInfo sampler_desc_info;
     bool in_level;
 
+    // Z-buffer
+    VkImage zbuf_image;
+    VkImageView zbuf_view;
+    VmaAllocation zbuf_alloc;
+
     struct vulkan_swapchain *swapchain;
 };
 

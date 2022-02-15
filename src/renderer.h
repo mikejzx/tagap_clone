@@ -11,6 +11,12 @@ struct tagap_layer;
 struct tagap_linedef;
 struct tagap_trigger;
 
+#define DEPTH_BACKGROUND (-150.0f)
+#define DEPTH_POLYGONS (-75.0f)
+#define DEPTH_TRIGGERS (75.0f)
+#define DEPTH_LINEDEFS (100.0f)
+#define DEPTH_ENTITIES (150.0f)
+
 /*
  * renderer.h
  *
@@ -64,10 +70,10 @@ void renderer_render(vec3s *);
 void renderer_deinit(void);
 
 struct renderable *renderer_get_renderable(enum shader_type);
-struct renderable *renderer_get_renderable_quad(void);
-struct renderable * renderer_get_renderable_quad_dim(f32, f32, bool);
+struct renderable *renderer_get_renderable_quad(f32);
+struct renderable *renderer_get_renderable_quad_dim(f32, f32, bool, f32);
 void renderer_add_polygon(struct tagap_polygon *);
-void renderer_add_layer(struct tagap_layer *);
+void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);
 void renderer_add_trigger(struct tagap_trigger *);
 void renderer_add_polygon_fade(struct tagap_polygon *);

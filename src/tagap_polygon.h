@@ -12,6 +12,8 @@ struct tagap_polygon
 
     vec2s points[POLYGON_MAX_POINTS];
     int point_count;
+
+    u32 depth;
 };
 
 #endif

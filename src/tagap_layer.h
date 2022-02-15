@@ -22,6 +22,8 @@ struct tagap_layer
     vec2s movement_speed;
 
     enum tagap_layer_rendering_flag rendering_flag;
+
+    u32 depth;
 };
 
 #endif

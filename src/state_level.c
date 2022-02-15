@@ -73,6 +73,8 @@ level_reset(void)
     g_map->entity_count = 0;
     g_map->tmp_entity_count = 0;
 
+    g_map->current_depth = 0;
+
     // Need to set this to zero to reset polygon point counters
     memset(g_map->polygons, 0,
         LEVEL_MAX_POLYGONS * sizeof(struct tagap_polygon));
@@ -110,7 +112,7 @@ level_submit_to_renderer(void)
         {
             continue;
         }
-        renderer_add_layer(&g_map->layers[i]);
+        renderer_add_layer(&g_map->layers[i], i);
     }
 
     // Polygons are rendered second

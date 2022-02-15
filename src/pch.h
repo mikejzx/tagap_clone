@@ -20,6 +20,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
+#define CGLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <cglm/struct.h>
 #include <vk_mem_alloc.h>
 #include <stb_image.h>

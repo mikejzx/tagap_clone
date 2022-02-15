@@ -268,12 +268,17 @@ vulkan_swapchain_create_framebuffers(struct vulkan_swapchain *swapchain)
 
     for (i32 i = 0; i < swapchain->image_count; ++i)
     {
+        VkImageView attachments[] = 
+        {
+            swapchain->imageviews[i], g_vulkan->zbuf_view,
+        };
+
         VkFramebufferCreateInfo fb_info =
         {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = g_vulkan->render_pass,
-            .attachmentCount = 1,
-            .pAttachments = &swapchain->imageviews[i],
+            .attachmentCount = sizeof(attachments) / sizeof(VkImageView),
+            .pAttachments = attachments,
             .width  = swapchain->extent.width,
             .height = swapchain->extent.height,
             .layers = 1,

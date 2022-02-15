@@ -1,7 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(location = 0) in vec2 a_Position;
+layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec4 a_VertexColour;
 
 layout(location = 0) out vec4 v_FragColour;
@@ -15,6 +15,6 @@ layout(push_constant) uniform constants
 
 void main()
 {
-    gl_Position = pconsts.mvp * vec4(a_Position, 0.0, 1.0);
+    gl_Position = pconsts.mvp * vec4(a_Position, 1.0);
     v_FragColour = a_VertexColour;
 }

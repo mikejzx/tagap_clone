@@ -128,7 +128,12 @@ renderer_add_polygon(struct tagap_polygon *p)
         const vec2s pos = p->points[i];
         vertices[i] = (struct vertex)
         {
-            .pos = pos,
+            .pos = (vec3s)
+            {
+                pos.x,
+                pos.y,
+                DEPTH_POLYGONS + p->depth / 10.0f,
+            },
             .texcoord = (vec2s)
             {{
                  -(p->points[p->tex_offset_point].x - p->points[i].x)
@@ -237,10 +242,11 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             // Top left
             info->v[cur_l * 4 + 0] = (struct vertex)
             {
-                .pos = (vec2s)
+                .pos = (vec3s)
                 {
                     l->start.x,
                     l->start.y,
+                    DEPTH_LINEDEFS,
                 },
                 .texcoord = (vec2s)
                 {
@@ -251,10 +257,11 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             // Top right
             info->v[cur_l * 4 + 1] = (struct vertex)
             {
-                .pos = (vec2s)
+                .pos = (vec3s)
                 {
                     l->end.x,
                     l->end.y,
+                    DEPTH_LINEDEFS,
                 },
                 .texcoord = (vec2s)
                 {
@@ -265,10 +272,11 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             // Bottom right
             info->v[cur_l * 4 + 2] = (struct vertex)
             {
-                .pos = (vec2s)
+                .pos = (vec3s)
                 {
                     l->end.x,
                     l->end.y - tex_h,
+                    DEPTH_LINEDEFS,
                 },
                 .texcoord = (vec2s)
                 {
@@ -279,10 +287,11 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             // Bottom left
             info->v[cur_l * 4 + 3] = (struct vertex)
             {
-                .pos = (vec2s)
+                .pos = (vec3s)
                 {
                     l->start.x,
                     l->start.y - tex_h,
+                    DEPTH_LINEDEFS,
                 },
                 .texcoord = (vec2s)
                 {
@@ -325,7 +334,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
  * Add a layer to the renderer
  */
 void
-renderer_add_layer(struct tagap_layer *l)
+renderer_add_layer(struct tagap_layer *l, i32 z_offset)
 {
     // Load layer texture
     char texpath[256];
@@ -359,22 +368,22 @@ renderer_add_layer(struct tagap_layer *l)
     {
         // Top left
         {
-            .pos      = (vec2s) { 0.0f, h },
+            .pos      = (vec3s) { 0.0f, h, DEPTH_BACKGROUND + z_offset },
             .texcoord = (vec2s) { 0.0f, 0.0f, },
         },
         // Top right
         {
-            .pos      = (vec2s) { w, h },
+            .pos      = (vec3s) { w, h, DEPTH_BACKGROUND + z_offset },
             .texcoord = (vec2s) { w / tex_size.x, 0.0f, },
         },
         // Bottom right
         {
-            .pos      = (vec2s) { w, 0.0f },
+            .pos      = (vec3s) { w, 0.0f, DEPTH_BACKGROUND + z_offset },
             .texcoord = (vec2s) { w / tex_size.x, 1.0f, },
         },
         // Bottom left
         {
-            .pos      = (vec2s) { 0.0f, 0.0f },
+            .pos      = (vec3s) { 0.0f, 0.0f, DEPTH_BACKGROUND + z_offset },
             .texcoord = (vec2s) { 0.0f, 1.0f, },
         },
     };
@@ -420,7 +429,8 @@ renderer_add_trigger(struct tagap_trigger *t)
             h = g_vulkan->textures[tex_index].h;
 
         // Create the quad
-        struct renderable *r = renderer_get_renderable_quad_dim(w, h, false);
+        struct renderable *r = renderer_get_renderable_quad_dim(w, h, false, 
+            DEPTH_TRIGGERS + l->depth);
         r->tex = tex_index;
         r->pos.x = t->corner_tl.x;
         r->pos.y = -t->corner_br.y;
@@ -436,7 +446,7 @@ renderer_add_trigger(struct tagap_trigger *t)
 }
 
 struct renderable *
-renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre)
+renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre, f32 depth)
 {
     struct renderable *r = renderer_get_renderable(SHADER_DEFAULT);
     if (!r) return NULL;
@@ -447,25 +457,25 @@ renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre)
         // Top left
         vertices[0] = (struct vertex)
         {
-            .pos      = (vec2s) { -w, h },
+            .pos      = (vec3s) { -w, h, depth },
             .texcoord = (vec2s) { 0.0f, 0.0f, },
         };
         // Top right
         vertices[1] = (struct vertex)
         {
-            .pos      = (vec2s) { w, h },
+            .pos      = (vec3s) { w, h, depth },
             .texcoord = (vec2s) { 1.0f, 0.0f, },
         };
         // Bottom right
         vertices[2] = (struct vertex)
         {
-            .pos      = (vec2s) { w, -h },
+            .pos      = (vec3s) { w, -h, depth },
             .texcoord = (vec2s) { 1.0f, 1.0f, },
         };
         // Bottom left
         vertices[3] = (struct vertex)
         {
-            .pos      = (vec2s) { -w, -h },
+            .pos      = (vec3s) { -w, -h, depth },
             .texcoord = (vec2s) { 0.0f, 1.0f, },
         };
     }
@@ -474,25 +484,25 @@ renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre)
         // Top left
         vertices[0] = (struct vertex)
         {
-            .pos      = (vec2s) { 0.0f, h },
+            .pos      = (vec3s) { 0.0f, h, depth },
             .texcoord = (vec2s) { 0.0f, 0.0f, },
         };
         // Top right
         vertices[1] = (struct vertex)
         {
-            .pos      = (vec2s) { w, h },
+            .pos      = (vec3s) { w, h, depth },
             .texcoord = (vec2s) { 1.0f, 0.0f, },
         };
         // Bottom right
         vertices[2] = (struct vertex)
         {
-            .pos      = (vec2s) { w, 0.0f },
+            .pos      = (vec3s) { w, 0.0f, depth },
             .texcoord = (vec2s) { 1.0f, 1.0f, },
         };
         // Bottom left
         vertices[3] = (struct vertex)
         {
-            .pos      = (vec2s) { 0.0f, 0.0f },
+            .pos      = (vec3s) { 0.0f, 0.0f, depth },
             .texcoord = (vec2s) { 0.0f, 1.0f, },
         };
     }
@@ -509,9 +519,9 @@ renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre)
 }
 
 struct renderable *
-renderer_get_renderable_quad(void)
+renderer_get_renderable_quad(f32 depth)
 {
-    return renderer_get_renderable_quad_dim(0.5f, 0.5f, true);
+    return renderer_get_renderable_quad_dim(0.5f, 0.5f, true, depth);
 }
 
 /*
@@ -536,7 +546,12 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
         const vec2s pos = p->points[i];
         vertices[i] = (struct vertex_vl)
         {
-            .pos = pos,
+            .pos = (vec3s)
+            {
+                pos.x,
+                pos.y,
+                DEPTH_POLYGONS + p->depth / 10.0f,
+            },
             .colour = (vec4s)
             {
                 0.0f, 

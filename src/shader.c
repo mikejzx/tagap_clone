@@ -26,7 +26,7 @@ g_shader_list[SHADER_COUNT] =
             {
                 .binding = 0,
                 .location = 0,
-                .format = VK_FORMAT_R32G32_SFLOAT,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
                 .offset = offsetof(struct vertex, pos),
             },
             // #2: texcoord
@@ -58,7 +58,7 @@ g_shader_list[SHADER_COUNT] =
             {
                 .binding = 0,
                 .location = 0,
-                .format = VK_FORMAT_R32G32_SFLOAT,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
                 .offset = offsetof(struct vertex_vl, pos),
             },
             // #2: vertex colour
@@ -217,6 +217,19 @@ shader_init(struct shader *s)
     };
 
     /*
+     * Depth testing
+     */
+    VkPipelineDepthStencilStateCreateInfo depth_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE,
+    };
+
+    /*
      * Colour blending
      */
     VkPipelineColorBlendAttachmentState colour_blend_attachment =
@@ -287,7 +300,7 @@ shader_init(struct shader *s)
         .pViewportState = &viewport_state_info,
         .pRasterizationState = &rasteriser_info,
         .pMultisampleState = &multisample_info,
-        .pDepthStencilState = NULL,
+        .pDepthStencilState = &depth_info,
         .pColorBlendState = &colour_blend_state_info,
         .pDynamicState = NULL,
 

@@ -2,20 +2,38 @@ tagap_clone
 ===========
 
 Clone/imitation of the original TAGAP (The Apocalyptic Game About Penguins)
-game engine, which is a freeware game released over a decade ago.  This
-alternative engine is written in C and uses Vulkan for graphics stuff.
+game engine, which is a freeware shoot-em-up platformer game released over a
+decade ago. This alternative engine is written in C and uses Vulkan for
+graphics stuff.
 
 This engine aims to be fairly compatible with the original game files and
-scripts, albeit very likely to not support *all* TAGAP_Script functionality.
-The game files are not provided in this repository, and must be downloaded via
-the official links on the TAGAP website: https://www.tagap.net/down_tagap.htm
+scripts, although only supports a small subset of TAGAP_Script functionality at
+the moment.
+The original games files are not provided in this repository, though freeware,
+they should be downloaded via the official links to the official game on the
+TAGAP website: https://www.tagap.net/down_tagap.htm
 
 The engine is currently quite barebones, and intentionally so; it does NOT aim
 to be an *exact* clone of the original engine, but is rather written for fun,
 learning purposes, and as an experiment to try some things out that wouldn't be
-possible in the official game.
+possible through mere mods to the official game.
 
 Notes:
-* No Windows support as of yet
-* Depends on libsdl2 (ensure that Vulkan support is compiled in)
+* Author is not affiliated with Penguin DT in any way.
+* No copyright infringement intended.  This software does not claim to be the
+  original TAGAP game in any way.  It is simply a game engine that can operate
+  using the assets of the original (freeware) game.
+* No support for Microsoft Windows garbage as of yet.  Only builds on Linux at
+  the moment.
 * This is a work in progress, and likely will not feature full functionality
+  anytime soon.
+
+Dependencies (not provided as of yet):
+* libsdl2 (ensure that Vulkan support is compiled into it)
+* cglm
+* Vulkan Memory Allocator
+* stb_image
+
+Read the Makefile for info on where to put the dependencies (except SDL2 which
+is dynamically linked).
+ 

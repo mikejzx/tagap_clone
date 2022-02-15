@@ -52,6 +52,7 @@ static i32 vulkan_create_allocator(void);
 static i32 vulkan_create_render_pass(void);
 static i32 vulkan_create_descriptor_set_layout(void);
 static i32 vulkan_create_command_pool(void);
+static i32 vulkan_create_zbuffer();
 static i32 vulkan_create_sync_objects(void);
 static i32 vulkan_create_command_buffers(void);
 static i32 vulkan_create_descriptor_pool(void);
@@ -93,6 +94,7 @@ vulkan_renderer_init(SDL_Window *handle)
     (status = vulkan_create_render_pass()) < 0 ||
     (status = vulkan_create_descriptor_set_layout()) < 0 ||
     (status = vulkan_shaders_init_all()) < 0 ||
+    (status = vulkan_create_zbuffer()) < 0 ||
     (status = vulkan_swapchain_create_framebuffers(swapchain)) < 0 ||
     (status = vulkan_create_command_pool()) < 0 ||
     (status = vulkan_create_sync_objects()) < 0 ||
@@ -130,6 +132,10 @@ vulkan_renderer_deinit(void)
                 g_vulkan->textures[i].alloc);
         }
     }
+
+    // Cleanup Z-buffer
+    vkDestroyImageView(g_vulkan->d, g_vulkan->zbuf_view, NULL);
+    vmaDestroyImage(g_vulkan->vma, g_vulkan->zbuf_image, g_vulkan->zbuf_alloc);
 
     if (in_flight_images) free(in_flight_images);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -592,12 +598,31 @@ vulkan_create_render_pass(void)
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
 
+    // Z-buffer attachment description
+    VkAttachmentDescription depth_attachment =
+    {
+        .format = VK_FORMAT_D32_SFLOAT,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference depth_attachment_ref =
+    {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
     // Subpass
     VkSubpassDescription subpass =
     {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = 1,
         .pColorAttachments = &colour_attachment_ref,
+        .pDepthStencilAttachment = &depth_attachment_ref,
     };
 
     /*
@@ -622,11 +647,16 @@ vulkan_create_render_pass(void)
     /*
      * Create the render pass
      */
+    VkAttachmentDescription attachments[2] = 
+    { 
+        colour_attachment, depth_attachment 
+    };
     VkRenderPassCreateInfo render_pass_info =
     {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &colour_attachment,
+        .attachmentCount = sizeof(attachments) / 
+            sizeof(VkAttachmentDescription),
+        .pAttachments = attachments,
         .subpassCount = 1,
         .pSubpasses = &subpass,
         .dependencyCount = 1,
@@ -766,7 +796,13 @@ vulkan_record_command_buffers(
     }
 
     // Configure render pass
-    static const VkClearValue clear_colour = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}};
+    static const VkClearValue clear_colours[] = 
+    {
+        // Clear colour
+        {{{ 0.0f, 0.0f, 0.0f, 1.0f }}},
+        // Depth clear value
+        {{{ 1.0f, 0.0f }}},
+    };
     VkRenderPassBeginInfo render_pass_info =
     {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -777,8 +813,8 @@ vulkan_record_command_buffers(
             .offset = { 0, 0 },
             .extent = swapchain->extent,
         },
-        .clearValueCount = 1,
-        .pClearValues = &clear_colour,
+        .clearValueCount = sizeof(clear_colours) / sizeof(VkClearValue),
+        .pClearValues = clear_colours,
     };
 
     // Begin the render pass
@@ -889,7 +925,7 @@ vulkan_record_obj_command_buffer(
     mat4s m_p = glms_ortho(
         0.0f, WIDTH_INTERNAL,
         0.0f, HEIGHT_INTERNAL,
-        -1.0f, 1.0f);
+        -225.0f, 225.0f);
 
     // World darkness value; this is constant for now but are defined by
     // DARKNESS theme command
@@ -1741,4 +1777,79 @@ vulkan_rewrite_descriptors(void)
             0, NULL);
     }
     return 0;
+}
+
+/* Create the depth buffer image */
+static i32
+vulkan_create_zbuffer(void)
+{
+    VkFormat fmt = VK_FORMAT_D32_SFLOAT;
+
+    i32 w = swapchain->extent.width,
+        h = swapchain->extent.height;
+
+    // Create image
+    const VkImageCreateInfo image_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .extent =
+        {
+            .width = w,
+            .height = h,
+            .depth = 1,
+        },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .format = fmt,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .flags = 0,
+    };
+    const VmaAllocationCreateInfo image_alloc_info =
+    {
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    };
+    if (vmaCreateImage(g_vulkan->vma,
+        &image_info,
+        &image_alloc_info,
+        &g_vulkan->zbuf_image,
+        &g_vulkan->zbuf_alloc, NULL) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create Z-buffer image");
+        goto fail;
+    }
+
+    // Create imageview
+    VkImageViewCreateInfo view_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = g_vulkan->zbuf_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = fmt,
+        .subresourceRange =
+        {
+            .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+    if (vkCreateImageView(g_vulkan->d,
+        &view_info,
+        NULL,
+        &g_vulkan->zbuf_view) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to create image view for Z-buffer");
+        goto fail;
+    }
+
+    return 0;
+fail:
+    return -1;
 }

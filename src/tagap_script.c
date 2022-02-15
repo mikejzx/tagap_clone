@@ -382,6 +382,7 @@ tagap_script_run_cmd_in_state(
             .tex_offset_point = ss->tok[1].i,
             .tex_is_shaded = ss->tok[2].b,
             .point_count = 0,
+            .depth = g_map->current_depth++,
         };
         strcpy(p->tex_name, ss->tok[0].str);
     } break;
@@ -672,6 +673,7 @@ tagap_script_run_cmd_in_state(
             .offset_y = ss->tok[1].f,
             .movement_speed = (vec2s) { ss->tok[2].f, ss->tok[3].f },
             .rendering_flag = ss->tok[5].i,
+            .depth = g_map->current_depth++,
         };
         strcpy(l->tex_name, ss->tok[4].str);
     } break;

@@ -38,7 +38,8 @@ entity_spawn(struct tagap_entity *e)
         }
 
         // Create the sprite renderable
-        e->sprites[s] = renderer_get_renderable_quad();
+        e->sprites[s] = renderer_get_renderable_quad(
+            DEPTH_ENTITIES + g_map->entity_count + s / 10.0f);
         struct renderable *r = e->sprites[s];
 
         r->tex = spr->info->frames[0].tex;
@@ -256,8 +257,7 @@ entity_update(struct tagap_entity *e)
             // Apply weapon kick animation
             f32 kick_value = KICK_AMOUNT * e->weapon_kick_timer * 
                 ((f32)e->flipped * 2.0f - 1.0f);
-            f32 kick_x = cosf(glm_rad(e->aim_angle));
-            spr_pos.x += kick_value * kick_x;
+            spr_pos.x += kick_value * cosf(glm_rad(e->aim_angle));
             spr_pos.y += kick_value * sinf(glm_rad(e->aim_angle));
 
             // Texture adjustments (only apply to the weapon owner)

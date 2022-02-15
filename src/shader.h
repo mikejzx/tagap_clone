@@ -22,7 +22,7 @@ enum shader_type
 struct vertex
 {
     // Vertex positions
-    vec2s pos;
+    vec3s pos;
 
     // Texcoords
     vec2s texcoord;
@@ -32,7 +32,7 @@ struct vertex
 struct vertex_vl
 {
     // Vertex positions
-    vec2s pos;
+    vec3s pos;
 
     // Vertex colour
     vec4s colour;
