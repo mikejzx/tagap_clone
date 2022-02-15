@@ -1,10 +1,12 @@
 #include "pch.h"
 #include "index_buffer.h"
+#include "renderer.h"
 #include "tagap.h"
 #include "tagap_theme.h"
 #include "vertex_buffer.h"
 #include "vulkan_renderer.h"
 #include "vulkan_swapchain.h"
+#include "shader.h"
 
 #define MAX_FRAMES_IN_FLIGHT 2
 
@@ -49,7 +51,6 @@ static i32 vulkan_create_logical_device(void);
 static i32 vulkan_create_allocator(void);
 static i32 vulkan_create_render_pass(void);
 static i32 vulkan_create_descriptor_set_layout(void);
-static i32 vulkan_create_graphics_pipeline(void);
 static i32 vulkan_create_command_pool(void);
 static i32 vulkan_create_sync_objects(void);
 static i32 vulkan_create_command_buffers(void);
@@ -60,14 +61,6 @@ static i32 vulkan_rewrite_descriptors(void);
 
 static VkCommandBuffer vulkan_begin_oneshot_cmd(void);
 static i32 vulkan_end_oneshot_cmd(VkCommandBuffer);
-
-struct push_constants
-{
-    mat4s mvp;
-    vec4s shading;
-    vec2s tex_offset;
-    int tex_index;
-};
 
 static inline bool
 is_qfam_complete(struct queue_family *qfam, u32 count)
@@ -89,6 +82,7 @@ vulkan_renderer_init(SDL_Window *handle)
     i32 status;
 
     swapchain = calloc(1, sizeof(struct vulkan_swapchain));
+    g_vulkan->swapchain = swapchain;
 
     (void)((status = vulkan_create_instance(handle)) < 0 ||
     (status = vulkan_create_surface(handle)) < 0 ||
@@ -97,15 +91,15 @@ vulkan_renderer_init(SDL_Window *handle)
     (status = vulkan_create_allocator()) < 0 ||
     (status = vulkan_swapchain_create(swapchain)) < 0 ||
     (status = vulkan_create_render_pass()) < 0 ||
-    (status = vulkan_create_descriptor_set_layout() < 0) ||
-    (status = vulkan_create_graphics_pipeline()) < 0 ||
+    (status = vulkan_create_descriptor_set_layout()) < 0 ||
+    (status = vulkan_shaders_init_all()) < 0 ||
     (status = vulkan_swapchain_create_framebuffers(swapchain)) < 0 ||
-    (status = vulkan_create_command_pool() < 0) ||
-    (status = vulkan_create_sync_objects() < 0) ||
-    (status = vulkan_create_descriptor_pool() < 0) ||
-    (status = vulkan_setup_textures() < 0) ||
-    (status = vulkan_rewrite_descriptors() < 0) ||
-    (status = vulkan_create_command_buffers() < 0));
+    (status = vulkan_create_command_pool()) < 0 ||
+    (status = vulkan_create_sync_objects()) < 0 ||
+    (status = vulkan_create_descriptor_pool()) < 0 ||
+    (status = vulkan_setup_textures()) < 0 ||
+    (status = vulkan_rewrite_descriptors()) < 0 ||
+    (status = vulkan_create_command_buffers()) < 0);
     return status;
 }
 
@@ -155,8 +149,7 @@ vulkan_renderer_deinit(void)
     }
     vkDestroyCommandPool(g_vulkan->d, g_vulkan->cmd_pool, NULL);
     vulkan_swapchain_deinit_framebuffers(swapchain);
-    vkDestroyPipeline(g_vulkan->d, g_vulkan->pipeline, NULL);
-    vkDestroyPipelineLayout(g_vulkan->d, g_vulkan->pipeline_layout, NULL);
+    vulkan_shaders_free_all();
     vkDestroyDescriptorSetLayout(g_vulkan->d, g_vulkan->desc_set_layout, NULL);
     vkDestroyRenderPass(g_vulkan->d, g_vulkan->render_pass, NULL);
     vulkan_swapchain_deinit(swapchain);
@@ -688,276 +681,6 @@ vulkan_create_descriptor_set_layout(void)
     return 0;
 }
 
-VkShaderModule
-create_shader_module(const u32 *buf, size_t len)
-{
-    VkShaderModuleCreateInfo create_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = len,
-        .pCode = buf,
-    };
-
-    VkShaderModule module;
-    if (vkCreateShaderModule(g_vulkan->d,
-        &create_info, NULL, &module) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to create shader module");
-    }
-    return module;
-}
-
-/*
- * Create the graphics pipeline
- */
-static i32
-vulkan_create_graphics_pipeline(void)
-{
-    /*
-     * Read shaders
-     * TODO: better shader management
-     */
-#define SHADER_VERT_PATH "shader/default.vert.spv"
-#define SHADER_FRAG_PATH "shader/default.frag.spv"
-    // Load vertex shader
-    FILE *fp = fopen(SHADER_VERT_PATH, "rb");
-    if (!fp)
-    {
-        LOG_ERROR("[vulkan] failed to read vertex shader file '%s'",
-            SHADER_VERT_PATH);
-        return -1;
-    }
-
-    // Read vertex shader size
-    fseek(fp, 0, SEEK_END);
-    size_t vert_len = ftell(fp);
-    rewind(fp);
-    u32 *vert_data = malloc(vert_len * sizeof(u32));
-
-    // Read vertex shader data
-    size_t n = fread(vert_data, vert_len, 1, fp);
-    fclose(fp);
-
-    // Load fragment shader
-    fp = fopen(SHADER_FRAG_PATH, "rb");
-    if (!fp)
-    {
-        LOG_ERROR("[vulkan] failed to read fragment shader file '%s'",
-            SHADER_FRAG_PATH);
-        free(vert_data);
-        return -1;
-    }
-
-    // Read fragment shader size
-    fseek(fp, 0, SEEK_END);
-    size_t frag_len = ftell(fp);
-    rewind(fp);
-    u32 *frag_data = malloc(frag_len * sizeof(u32));
-
-    n = fread(frag_data, frag_len, 1, fp);
-    (void)n;
-    fclose(fp);
-
-    VkShaderModule vert = create_shader_module(vert_data, vert_len);
-    VkShaderModule frag = create_shader_module(frag_data, frag_len);
-
-    free(vert_data);
-    free(frag_data);
-
-    /*
-     * Create shader stages
-     */
-    VkPipelineShaderStageCreateInfo vert_stage_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = vert,
-        .pName = "main",
-    },
-    frag_stage_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = frag,
-        .pName = "main",
-    };
-    const VkPipelineShaderStageCreateInfo shader_stages[] =
-    {
-        vert_stage_info, frag_stage_info
-    };
-
-    /*
-     * Vertex input
-     */
-    VkPipelineVertexInputStateCreateInfo vertex_input_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &VERTEX_BINDING_DESC,
-        .vertexAttributeDescriptionCount = VERTEX_ATTR_COUNT,
-        .pVertexAttributeDescriptions = VERTEX_ATTR_DESC,
-    };
-
-    /*
-     * Input assembly
-     */
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .primitiveRestartEnable = VK_FALSE,
-    };
-
-    /*
-     * Viewport state
-     */
-    VkViewport viewport =
-    {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = (f32)swapchain->extent.width,
-        .height = (f32)swapchain->extent.height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    VkRect2D scissor =
-    {
-        .offset = { 0, 0 },
-        .extent = swapchain->extent,
-    };
-    VkPipelineViewportStateCreateInfo viewport_state_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .pViewports = &viewport,
-        .scissorCount = 1,
-        .pScissors = &scissor,
-    };
-
-    /*
-     * Rasteriser
-     */
-    VkPipelineRasterizationStateCreateInfo rasteriser_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,
-        // Can modify this for wireframe mode
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        //.polygonMode = VK_POLYGON_MODE_LINE,
-        .lineWidth = 1.0f,
-        // We can't enable baceface culling right now because the polygon
-        // index calculation means we could get points that are both clockwise
-        // and counter clockwise
-        //.cullMode = VK_CULL_MODE_BACK_BIT,
-        .cullMode = VK_CULL_MODE_NONE,
-
-        // Flip faces because we render with flipped Y
-        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        //.frontFace = VK_FRONT_FACE_CLOCKWISE,
-    };
-
-    /*
-     * Multisampler
-     */
-    VkPipelineMultisampleStateCreateInfo multisample_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .sampleShadingEnable = VK_FALSE,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-    };
-
-    /*
-     * Colour blending
-     */
-    VkPipelineColorBlendAttachmentState colour_blend_attachment =
-    {
-        .colorWriteMask =
-            VK_COLOR_COMPONENT_R_BIT |
-            VK_COLOR_COMPONENT_G_BIT |
-            VK_COLOR_COMPONENT_B_BIT |
-            VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = VK_BLEND_OP_ADD,
-    };
-    VkPipelineColorBlendStateCreateInfo colour_blend_state_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = VK_FALSE,
-        .attachmentCount = 1,
-        .pAttachments = &colour_blend_attachment,
-    };
-
-    /*
-     * Push constants
-     */
-    const VkPushConstantRange push_consts =
-    {
-        .offset = 0,
-        .size = sizeof(struct push_constants),
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    };
-
-    /*
-     * Pipeline layout
-     */
-    VkPipelineLayoutCreateInfo pipeline_layout_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pPushConstantRanges = &push_consts,
-        .pushConstantRangeCount = 1,
-        .setLayoutCount = 1,
-        .pSetLayouts = &g_vulkan->desc_set_layout,
-    };
-    if (vkCreatePipelineLayout(g_vulkan->d,
-        &pipeline_layout_info, NULL, &g_vulkan->pipeline_layout) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to create pipeline layout");
-        return -1;
-    }
-
-    /*
-     * Finally create the damn pipeline
-     */
-    VkGraphicsPipelineCreateInfo pipeline_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = sizeof(shader_stages) /
-            sizeof(VkPipelineShaderStageCreateInfo),
-        .pStages = shader_stages,
-
-        .pVertexInputState = &vertex_input_info,
-        .pInputAssemblyState = &input_assembly_info,
-        .pViewportState = &viewport_state_info,
-        .pRasterizationState = &rasteriser_info,
-        .pMultisampleState = &multisample_info,
-        .pDepthStencilState = NULL,
-        .pColorBlendState = &colour_blend_state_info,
-        .pDynamicState = NULL,
-
-        .layout = g_vulkan->pipeline_layout,
-        .renderPass = g_vulkan->render_pass,
-        .subpass = 0,
-    };
-    if (vkCreateGraphicsPipelines(g_vulkan->d, VK_NULL_HANDLE, 1,
-        &pipeline_info, NULL, &g_vulkan->pipeline) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to create graphics pipeline");
-        return -1;
-    }
-
-    vkDestroyShaderModule(g_vulkan->d, frag, NULL);
-    vkDestroyShaderModule(g_vulkan->d, vert, NULL);
-
-    LOG_INFO("[vulkan] graphics pipeline created!");
-
-    return 0;
-}
-
 /*
  * Create the command pool
  */
@@ -1007,14 +730,23 @@ vulkan_create_command_buffers(void)
     return 0;
 }
 
+static void vulkan_record_obj_command_buffer(
+    VkCommandBuffer, 
+    struct renderable *,
+    struct shader *,
+    enum shader_type,
+    vec3s *);
+
+static bool vulkan_check_should_cull_obj(struct renderable *, vec3s *);
+
 /*
  * Record into current command buffer
  */
 i32
 vulkan_record_command_buffers(
-    struct renderable *objs,
-    size_t obj_count,
-    vec3s cam_pos)
+    struct renderer_obj_group *objgrps,
+    size_t objgrp_count,
+    vec3s *cam_pos)
 {
     VkCommandBuffer cbuf = g_vulkan->cmd_buffers[cur_image_index];
 
@@ -1053,133 +785,123 @@ vulkan_record_command_buffers(
     vkCmdBeginRenderPass(cbuf, &render_pass_info,
         VK_SUBPASS_CONTENTS_INLINE);
 
-    // Bind the graphics pipeline
-    vkCmdBindPipeline(cbuf,
-        VK_PIPELINE_BIND_POINT_GRAPHICS, g_vulkan->pipeline);
-
-    static const VkDeviceSize offset = 0;
+    // Reset draw count
     g_state.draw_calls = 0;
-    for (i32 o = 0; o < obj_count; ++o)
-    {
-        // Skip hidden objects
-        if (objs[o].hidden) continue;
 
-        // Cull objects that have bounds outside the viewport
-        // Extremely effective at more than doubling the FPS
-    #ifndef NO_CULLING
-        if (!objs[o].no_cull)
+    // Iterate over each of the groups (i.e. objects with different shaders)
+    for (u32 g = 0; g < objgrp_count; ++g)
+    {
+        struct renderable *objs = objgrps[g].objs;
+        u32 obj_count = objgrps[g].obj_count;
+
+        // Bind the graphics pipeline for this shader
+        vkCmdBindPipeline(cbuf,
+            VK_PIPELINE_BIND_POINT_GRAPHICS, g_shader_list[g].pipeline);
+
+        // Render each object
+        for (i32 o = 0; o < obj_count; ++o)
         {
-            struct bounds
-            {
-                vec2s min, max;
-            };
-            const struct bounds viewport_bounds =
-            {
-                .min = (vec2s)
-                {{
-                    cam_pos.x,
-                    -cam_pos.y - HEIGHT_INTERNAL,
-                }},
-                .max = (vec2s)
-                {{
-                    cam_pos.x + WIDTH_INTERNAL,
-                    -cam_pos.y,
-                }},
-            };
-            struct bounds obj_bounds;
-            if (!objs[o].tex_scale)
-            {
-                obj_bounds = (struct bounds)
-                {
-                    .min = (vec2s)
-                    {{
-                        objs[o].pos.x + objs[o].bounds.min.x,
-                        objs[o].pos.y + objs[o].bounds.min.y
-                    }},
-                    .max = (vec2s)
-                    {{
-                        objs[o].pos.x + objs[o].bounds.max.x,
-                        objs[o].pos.y + objs[o].bounds.max.y
-                    }},
-                };
-            }
-            else
-            {
-                // Using texture size as bounds
-                f32 tw = (f32)g_vulkan->textures[objs[o].tex].w / 2.0f,
-                    th = (f32)g_vulkan->textures[objs[o].tex].h / 2.0f;
-                obj_bounds = (struct bounds)
-                {
-                    .min = (vec2s)
-                    {{
-                        objs[o].pos.x - tw,
-                        -objs[o].pos.y - tw
-                    }},
-                    .max = (vec2s)
-                    {{
-                        objs[o].pos.x + tw,
-                        -objs[o].pos.y + th
-                    }},
-                };
-            }
-            bool in_aabb =
-                obj_bounds.min.x < viewport_bounds.max.x &&
-                obj_bounds.max.x > viewport_bounds.min.x &&
-                obj_bounds.min.y < viewport_bounds.max.y &&
-                obj_bounds.max.y > viewport_bounds.min.y;
-            if (!in_aabb)
+            // Skip hidden objects
+            if (objs[o].hidden) continue;
+
+            // Cull objects that have bounds outside the viewport
+            // Extremely effective at more than doubling the FPS
+        #ifndef NO_CULLING
+            if (vulkan_check_should_cull_obj(&objs[o], cam_pos))
             {
                 continue;
             }
-        }
-    #endif
+        #endif
 
-        // Bind vertex and index buffers
-        vkCmdBindVertexBuffers(cbuf,
-            0,
-            1,
-            &objs[o].vb.vk_buffer,
-            &offset);
-        vkCmdBindIndexBuffer(cbuf,
-            objs[o].ib.vk_buffer,
-            0,
-            VK_INDEX_TYPE_UINT16);
+            // Render the object
+            vulkan_record_obj_command_buffer(cbuf, 
+                &objs[o], &g_shader_list[g], g, cam_pos);
+        }
+    }
 
-        // Put MVP in push constants
-        f32 flip_sign = objs[o].flipped ? -1.0f : 1.0f;
-        mat4s m_m = (mat4s)GLMS_MAT4_IDENTITY_INIT;
-        m_m = glms_translate(m_m,
-            (vec3s)
-            {{
-                objs[o].pos.x + objs[o].offset.x * flip_sign,
-                objs[o].pos.y - objs[o].offset.y,
-                0.0f
-            }});
-        m_m.raw[0][0] *= flip_sign;
-        m_m.raw[1][1] *= -1.0f;
-        if (objs[o].rot != 0.0f)
+    // End render pass and end command buffer recording
+    vkCmdEndRenderPass(cbuf);
+    if (vkEndCommandBuffer(cbuf) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to record command buffer");
+        return -1;
+    }
+    return 0;
+}
+
+// Record to command buffer for a single object
+static void
+vulkan_record_obj_command_buffer(
+    VkCommandBuffer cbuf, 
+    struct renderable *obj,
+    struct shader *s,
+    enum shader_type shader_id,
+    vec3s *cam_pos)
+{
+    static const VkDeviceSize offset = 0;
+
+    // Bind vertex and index buffers
+    vkCmdBindVertexBuffers(cbuf,
+        0,
+        1,
+        &obj->vb.vk_buffer,
+        &offset);
+    vkCmdBindIndexBuffer(cbuf,
+        obj->ib.vk_buffer,
+        0,
+        IB_VKTYPE);
+
+    // Put MVP in push constants
+    f32 flip_sign = -((f32)obj->flipped * 2.0f - 1.0f);
+    mat4s m_m = (mat4s)GLMS_MAT4_IDENTITY_INIT;
+
+    // Apply object position
+    m_m = glms_translate(m_m, (vec3s)
+    {
+        obj->pos.x + obj->offset.x * flip_sign,
+        obj->pos.y - obj->offset.y,
+        0.0f
+    });
+    m_m.raw[0][0] *= flip_sign;
+    m_m.raw[1][1] *= -1.0f;
+    if (obj->rot != 0.0f)
+    {
+        // Apply object rotation
+        m_m = glms_rotate_z(m_m, glm_rad(obj->rot));
+    }
+    if (obj->tex_scale)
+    {
+        // Scale the object by texture size
+        m_m = glms_scale(m_m, (vec3s)
         {
-            m_m = glms_rotate_z(m_m, glm_rad(objs[o].rot));
-        }
-        if (objs[o].tex_scale)
-        {
-            m_m = glms_scale(m_m, (vec3s)
-            {{
-                (f32)g_vulkan->textures[objs[o].tex].w,
-                (f32)g_vulkan->textures[objs[o].tex].h,
-                1.0f,
-            }});
-        }
-        mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
-        m_v = glms_translate(m_v,
-            (vec3s){ -cam_pos.x, -cam_pos.y, 0.0f });
-        mat4s m_p = glms_ortho(
-            0.0f, WIDTH_INTERNAL,
-            0.0f, HEIGHT_INTERNAL,
-            -1.0f, 1.0f);
-        static const f32 DARKNESS = 0.65f;
-        f32 dim = (objs[o].is_shaded ? 0.70f : 1.0f) * DARKNESS;
-        const struct push_constants pconsts =
+            (f32)g_vulkan->textures[obj->tex].w,
+            (f32)g_vulkan->textures[obj->tex].h,
+            1.0f,
+        });
+    }
+    mat4s m_v = (mat4s)GLMS_MAT4_IDENTITY_INIT;
+
+    // Apply camera position
+    m_v = glms_translate(m_v,
+        (vec3s){ -cam_pos->x, -cam_pos->y, 0.0f });
+
+    // Projection matrix
+    mat4s m_p = glms_ortho(
+        0.0f, WIDTH_INTERNAL,
+        0.0f, HEIGHT_INTERNAL,
+        -1.0f, 1.0f);
+
+    // World darkness value; this is constant for now but are defined by
+    // DARKNESS theme command
+    static const f32 DARKNESS = 0.65f;
+    f32 dim = (obj->is_shaded ? 0.70f : 1.0f) * DARKNESS;
+    size_t pconst_size = s->pconst_size;
+    void *pconsts = alloca(pconst_size);
+
+    // A bit dodgey but works
+    if (shader_id == SHADER_DEFAULT)
+    {
+        struct push_constants p =
         {
             .mvp = glms_mat4_mul(m_p, glms_mat4_mul(m_v, m_m)),
             .shading = (vec4s)
@@ -1195,41 +917,121 @@ vulkan_record_command_buffers(
             .tex_offset = (vec2s)
             { 
                 // Apply parallax background effects
-                objs[o].parallax * (cam_pos.x / WIDTH_INTERNAL) * 0.5f,
+                obj->parallax * (cam_pos->x / WIDTH_INTERNAL) * 0.5f,
                 0.0f 
             },
-            .tex_index = objs[o].tex,
+            .tex_index = obj->tex,
         };
-        vkCmdPushConstants(cbuf,
-            g_vulkan->pipeline_layout,
-            VK_SHADER_STAGE_VERTEX_BIT,
-            0,
-            sizeof(struct push_constants),
-            &pconsts);
+        memcpy(pconsts, &p, pconst_size);
+    }
+    else if (shader_id == SHADER_VERTEXLIT)
+    {
+        struct push_constants_vl p =
+        {
+            .mvp = glms_mat4_mul(m_p, glms_mat4_mul(m_v, m_m)),
+        };
+        memcpy(pconsts, &p, pconst_size);
+    }
 
-        // Bind descriptor sets
+    // Push constants
+    vkCmdPushConstants(cbuf,
+        s->pipeline_layout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        pconst_size,
+        pconsts);
+
+    // Bind descriptor sets
+    if (s->use_descriptor_sets)
+    {
         vkCmdBindDescriptorSets(cbuf,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            g_vulkan->pipeline_layout,
+            s->pipeline_layout,
             0, 1,
             &g_vulkan->desc_sets[cur_image_index],
             0, NULL);
-
-        // Draw!
-        vkCmdDrawIndexed(cbuf,
-            objs[o].ib.size / sizeof(u16),
-            1, 0, 0, 0);
-        ++g_state.draw_calls;
     }
 
-    // End render pass and end command buffer recording
-    vkCmdEndRenderPass(cbuf);
-    if (vkEndCommandBuffer(cbuf) != VK_SUCCESS)
+    // Draw!
+    vkCmdDrawIndexed(cbuf,
+        obj->ib.size / sizeof(IB_TYPE),
+        1, 0, 0, 0);
+    ++g_state.draw_calls;
+}
+
+/* Check whether object should be culled */
+static bool
+vulkan_check_should_cull_obj(struct renderable *o, vec3s *cam_pos)
+{
+    if (o->no_cull)
     {
-        LOG_ERROR("[vulkan] failed to record command buffer");
-        return -1;
+        return false;
     }
-    return 0;
+
+    struct bounds
+    {
+        vec2s min, max;
+    };
+    const struct bounds viewport_bounds =
+    {
+        .min = (vec2s)
+        {{
+            cam_pos->x,
+            -cam_pos->y - HEIGHT_INTERNAL,
+        }},
+        .max = (vec2s)
+        {{
+            cam_pos->x + WIDTH_INTERNAL,
+            -cam_pos->y,
+        }},
+    };
+    struct bounds obj_bounds;
+    if (!o->tex_scale)
+    {
+        obj_bounds = (struct bounds)
+        {
+            .min = (vec2s)
+            {{
+                o->pos.x + o->bounds.min.x,
+                o->pos.y + o->bounds.min.y
+            }},
+            .max = (vec2s)
+            {{
+                o->pos.x + o->bounds.max.x,
+                o->pos.y + o->bounds.max.y
+            }},
+        };
+    }
+    else
+    {
+        // Using texture size as bounds
+        f32 tw = (f32)g_vulkan->textures[o->tex].w / 2.0f,
+            th = (f32)g_vulkan->textures[o->tex].h / 2.0f;
+        obj_bounds = (struct bounds)
+        {
+            .min = (vec2s)
+            {{
+                o->pos.x - tw,
+                -o->pos.y - tw
+            }},
+            .max = (vec2s)
+            {{
+                o->pos.x + tw,
+                -o->pos.y + th
+            }},
+        };
+    }
+    bool in_aabb =
+        obj_bounds.min.x < viewport_bounds.max.x &&
+        obj_bounds.max.x > viewport_bounds.min.x &&
+        obj_bounds.min.y < viewport_bounds.max.y &&
+        obj_bounds.max.y > viewport_bounds.min.y;
+    if (!in_aabb)
+    {
+        // Outside of viewport, so don't render it
+        return true;
+    }
+    return false;
 }
 
 

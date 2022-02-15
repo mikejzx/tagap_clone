@@ -5,7 +5,7 @@ DIRS=\
 SRCS=$(shell find -L src -name '*.c' | grep -P '.*\.c$$')
 
 CFLAGS_ALL=-D_GNU_SOURCE -Wall -std=c99
-CFLAGS_RELEASE=$(CFLAGS_ALL) -march=native -mtune=native -O2 -Wpedantic
+CFLAGS_RELEASE=$(CFLAGS_ALL) -march=native -mtune=native -O2
 CFLAGS_DEBUG=$(CFLAGS_ALL) -Og -g -DDEBUG -Wno-missing-braces
 
 LDFLAGS=-lm -lpthread -lvulkan \

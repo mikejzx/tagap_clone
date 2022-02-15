@@ -2,7 +2,9 @@
 #define VULKAN_RENDERER_H
 
 #include "types.h"
-#include "renderer.h"
+
+struct renderer_obj_group;
+struct shader;
 
 /*
  * vulkan_renderer.h
@@ -15,8 +17,6 @@
  * + Swapchain rebuilding (e.g. on window resizes, etc.)
  * + Selection of best GPU, at the moment we just select the first GPU that
  *   meets all requirements.
- * + Proper shader management; at the moment the file paths are hard-coded in
- *   the renderer
  */
 
 //#define WIDESCREEN
@@ -62,8 +62,6 @@ struct vulkan_renderer
     VkDescriptorSetLayout desc_set_layout;
     VkDescriptorSet *desc_sets;
     VkDescriptorPool desc_pool;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline; // Graphics pipeline
     VkCommandPool cmd_pool;
     VkCommandBuffer *cmd_buffers;
     u32 cmd_buffer_count;
@@ -82,6 +80,8 @@ struct vulkan_renderer
     VkDescriptorImageInfo *image_desc_infos;
     VkDescriptorImageInfo sampler_desc_info;
     bool in_level;
+
+    struct vulkan_swapchain *swapchain;
 };
 
 extern struct vulkan_renderer *g_vulkan;
@@ -99,7 +99,7 @@ i32 vulkan_create_buffer(VkDeviceSize,
 i32 vulkan_copy_buffer(VkBuffer, VkBuffer, size_t);
 
 i32 vulkan_render_frame_pre(void);
-i32 vulkan_record_command_buffers(struct renderable *, size_t, vec3s);
+i32 vulkan_record_command_buffers(struct renderer_obj_group *, size_t, vec3s *);
 i32 vulkan_render_frame(void);
 
 i32 vulkan_texture_load(const char *);

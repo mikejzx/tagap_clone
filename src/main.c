@@ -184,7 +184,7 @@ main (i32 argc, char **argv)
         }
 
         // Render this frame
-        renderer_render(g_state.cam_pos);
+        renderer_render(&g_state.cam_pos);
     }
 game_quit:
 

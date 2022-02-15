@@ -105,8 +105,11 @@ level_submit_to_renderer(void)
     // Render background layers first
     for (i = 0; i < g_map->layer_count; ++i)
     {
-        // TODO: use enum for rendering flags
-        if (g_map->layers[i].rendering_flag == 3) continue;
+        // Don't render as background if it's not a background
+        if (g_map->layers[i].rendering_flag == LAYER_RENDER_DISABLED)
+        {
+            continue;
+        }
         renderer_add_layer(&g_map->layers[i]);
     }
 
@@ -170,11 +173,13 @@ level_update()
     // Update pooled entities
     entity_pool_update();
 
-    // Update background layer positions
+    // Update parallax background layer positions
     for (u32 i = 0; i < g_map->layer_count; ++i)
     {
-        // TODO: enum for this
-        if (g_map->layers[i].rendering_flag == 3) continue;
+        if (g_map->layers[i].rendering_flag == LAYER_RENDER_DISABLED)
+        {
+            continue;
+        }
         g_map->layers[i].r->pos = (vec2s)
         {
             g_state.cam_pos.x,

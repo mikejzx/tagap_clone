@@ -4,7 +4,7 @@
 #include "types.h"
 
 /*
- * Vertex buffer
+ * Main ertex buffer structure
  */
 struct vbuffer
 {
@@ -13,44 +13,6 @@ struct vbuffer
     VmaAllocation vma_alloc;
     size_t size;
 };
-
-/*
- * Vertex attributes
- */
-struct vertex
-{
-    // Vertex positions
-    vec2s pos;
-
-    // Texcoords
-    vec2s texcoord;
-};
-
-static const VkVertexInputBindingDescription VERTEX_BINDING_DESC = 
-{
-    .binding = 0,
-    .stride = sizeof(struct vertex),
-    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-};
-
-// Describe all vertex attributes here
-static const VkVertexInputAttributeDescription VERTEX_ATTR_DESC[] =
-{
-    {
-        .binding = 0,
-        .location = 0,
-        .format = VK_FORMAT_R32G32_SFLOAT,
-        .offset = offsetof(struct vertex, pos),
-    },
-    {
-        .binding = 0,
-        .location = 1,
-        .format = VK_FORMAT_R32G32_SFLOAT,
-        .offset = offsetof(struct vertex, texcoord),
-    },
-};
-static const u32 VERTEX_ATTR_COUNT = 
-    sizeof(VERTEX_ATTR_DESC) / sizeof(VkVertexInputAttributeDescription);
 
 i32 vb_new(struct vbuffer *, const void *, size_t);
 void vb_free(struct vbuffer *);

@@ -3,6 +3,14 @@
 
 #define LAYER_TEX_NAME_MAX 64
 
+enum tagap_layer_rendering_flag
+{
+    LAYER_RENDER_NORMAL   = 0, // No layer flags
+    LAYER_RENDER_FADING   = 1, // Fades from solid to transparent
+    LAYER_RENDER_GLOOM    = 2, // Layer illuminates through windows/doors
+    LAYER_RENDER_DISABLED = 3, // Not drawn in backgrounds or monitor screens
+};
+
 struct renderable;
 
 struct tagap_layer
@@ -13,8 +21,7 @@ struct tagap_layer
     f32 offset_y;
     vec2s movement_speed;
 
-    // TODO: enum for this
-    i32 rendering_flag;
+    enum tagap_layer_rendering_flag rendering_flag;
 };
 
 #endif

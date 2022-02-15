@@ -49,7 +49,7 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
      * (Fallback to FIFO mode (Vsync) which is apparently guaranteed)
      */
     VkPresentModeKHR pmode = VK_PRESENT_MODE_FIFO_KHR;
-#if 0
+#if 1
     for (i32 i = 0; i < details.present_mode_count; ++i)
     {
         // Prefer mailbox (triple-buffering) mode
