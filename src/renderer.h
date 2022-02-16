@@ -10,12 +10,14 @@ struct tagap_polygon;
 struct tagap_layer;
 struct tagap_linedef;
 struct tagap_trigger;
+struct tagap_theme_info;
 
 #define DEPTH_BACKGROUND (-150.0f)
 #define DEPTH_POLYGONS (-75.0f)
 #define DEPTH_TRIGGERS (75.0f)
 #define DEPTH_LINEDEFS (100.0f)
 #define DEPTH_ENTITIES (150.0f)
+#define DEPTH_ENV (220.0f)
 
 /*
  * renderer.h
@@ -43,7 +45,11 @@ struct renderable
     vec2s offset;
     f32 rot;
     bool flipped;
-    f32 parallax;
+    vec2s tex_offset;
+
+    // Additional shading multiplier
+    bool use_extra_shading;
+    vec4s extra_shading;
 
     // For culling objects outside of the viewport
     struct
@@ -77,5 +83,6 @@ void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);
 void renderer_add_trigger(struct tagap_trigger *);
 void renderer_add_polygon_fade(struct tagap_polygon *);
+struct renderable *renderer_add_env(struct tagap_theme_info *);
 
 #endif

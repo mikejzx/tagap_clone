@@ -14,6 +14,7 @@
 #define TAGAP_TEXTURES_DIR TAGAP_ART_DIR "/textures"
 #define TAGAP_SPRITES_DIR TAGAP_ART_DIR "/sprites"
 #define TAGAP_LAYERS_DIR TAGAP_ART_DIR "/layers"
+#define TAGAP_EFFECTS_DIR TAGAP_ART_DIR "/effects"
 
 enum game_state
 {

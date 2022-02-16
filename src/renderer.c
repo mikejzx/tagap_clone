@@ -5,6 +5,7 @@
 #include "tagap_linedef.h"
 #include "tagap_layer.h"
 #include "tagap_trigger.h"
+#include "tagap_theme.h"
 #include "vulkan_renderer.h"
 #include "shader.h"
 
@@ -360,7 +361,6 @@ renderer_add_layer(struct tagap_layer *l, i32 z_offset)
     };
     r->is_shaded = true;
     r->no_cull = true;
-    r->parallax = l->scroll_speed_mul;
 
     f32 w = WIDTH_INTERNAL; 
     f32 h = tex_size.y;
@@ -592,3 +592,97 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
     ib_new(&r->ib, indices, index_buf_size);
 }
 
+struct renderable *
+renderer_add_env(struct tagap_theme_info *theme)
+{
+    // No environment texture to add
+    if (theme->env == ENVIRON_NONE) return NULL;
+
+    // Unimplemented for no
+    if (theme->env == ENVIRON_UNDERWATER || 
+        theme->env == ENVIRON_RAININT) return NULL;
+
+    static const char *ENV_TEX_NAMES[] =
+    {
+        [ENVIRON_NONE]       = "",
+        [ENVIRON_RAIN]       = TAGAP_EFFECTS_DIR "/fx_rain.tga",
+        [ENVIRON_RAININT]    = "",
+        [ENVIRON_SNOWING]    = TAGAP_EFFECTS_DIR "/fx_snow.tga",
+        [ENVIRON_UNDERWATER] = "",
+    };
+
+    // Load environment texture
+    i32 tex_index = vulkan_texture_load(ENV_TEX_NAMES[theme->env]);
+    if (tex_index < 0)
+    {
+        LOG_WARN("[renderer] can't add environment texture "
+            "(couldn't load texture for env %d)", theme->env);
+        return NULL;
+    }
+
+    // Create a fullscreen quad
+    struct renderable *r = renderer_get_renderable(SHADER_DEFAULT);
+    if (!r) return NULL;
+
+    r->tex = tex_index;
+    vec2s tex_size =
+    {
+        (f32)g_vulkan->textures[tex_index].w * 1.5f,
+        (f32)g_vulkan->textures[tex_index].h * 1.5f,
+    };
+    r->no_cull = true;
+    r->is_shaded = true;
+    r->use_extra_shading = true;
+    r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.25f};
+
+    f32 w = WIDTH, h = HEIGHT, depth = DEPTH_ENV;
+
+    // Create vertices
+    struct vertex vertices[4];
+    // Top left
+    vertices[0] = (struct vertex)
+    {
+        .pos      = (vec3s) { 0.0f, h, depth },
+        .texcoord = (vec2s) { 0.0f, 0.0f, },
+    };
+    // Top right
+    vertices[1] = (struct vertex)
+    {
+        .pos      = (vec3s) { w, h, depth },
+        .texcoord = (vec2s)
+        {
+             w / tex_size.x,
+             0.0f
+        },
+    };
+    // Bottom right
+    vertices[2] = (struct vertex)
+    {
+        .pos      = (vec3s) { w, 0.0f, depth },
+        .texcoord = (vec2s)
+        {
+             w / tex_size.x,
+             h / tex_size.y,
+        },
+    };
+    // Bottom left
+    vertices[3] = (struct vertex)
+    {
+        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .texcoord = (vec2s)
+        {
+             0.0f,
+             h / tex_size.y,
+        },
+    };
+    static const IB_TYPE indices[3 * 4] =
+    {
+        0, 1, 2,
+        0, 2, 3
+    };
+
+    vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
+    ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
+
+    return r;
+}

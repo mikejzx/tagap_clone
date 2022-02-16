@@ -929,10 +929,15 @@ vulkan_record_obj_command_buffer(
 
     // World darkness value; this is constant for now but are defined by
     // DARKNESS theme command
-    static const f32 DARKNESS = 0.65f;
-    f32 dim = (obj->is_shaded ? 0.70f : 1.0f) * DARKNESS;
+    f32 dim = (obj->is_shaded ? 0.70f : 1.0f) * 
+        theme_get_darkness_value(g_map->theme->darkness[THEME_STATE_BASE]);
     size_t pconst_size = s->pconst_size;
     void *pconsts = alloca(pconst_size);
+
+    // Additional shading multiplier
+    vec4s extra = obj->use_extra_shading 
+        ? obj->extra_shading 
+        : GLMS_VEC4_ONE;
 
     // A bit dodgey but works
     if (shader_id == SHADER_DEFAULT)
@@ -941,21 +946,16 @@ vulkan_record_obj_command_buffer(
         {
             .mvp = glms_mat4_mul(m_p, glms_mat4_mul(m_v, m_m)),
             .shading = (vec4s)
-            {{
+            {
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].x * dim,
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].x * dim * extra.x,
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].y * dim,
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].y * dim * extra.y,
                  g_map->theme->colours
-                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].z * dim,
-                 1.0f,
-            }},
-            .tex_offset = (vec2s)
-            { 
-                // Apply parallax background effects
-                obj->parallax * (cam_pos->x / WIDTH_INTERNAL) * 0.5f,
-                0.0f 
+                     [THEME_AFFECT_WORLD][THEME_STATE_BASE].z * dim * extra.z,
+                 1.0f * extra.w,
             },
+            .tex_offset = obj->tex_offset,
             .tex_index = obj->tex,
         };
         memcpy(pconsts, &p, pconst_size);

@@ -12,9 +12,7 @@
 
 #include "tagap_script_def.h"
 
-#define SCRIPT_ERROR(...) LOG_ERROR("[tagap_script] parse fail: " __VA_ARGS__)
-#define SCRIPT_WARN(...) LOG_WARN("[tagap_script] " __VA_ARGS__)
-#define LOG_SCRIPT(...) LOG_INFO("[tagap_script] " __VA_ARGS__)
+#include "tagap_script_logging.h"
 
 static i32 tagap_script_run_cmd_in_state(
     enum tagap_script_atom_id, struct tagap_script_state *);
@@ -88,9 +86,16 @@ tagap_script_run(const char *fpath)
     struct tagap_script_state ss;
     tagap_script_new_state(&ss);
 
+#ifdef DEBUG
+    ss.line_num = 1;
+    strcpy(ss.fname, fpath);
+#endif
+
     // Read the script file line by line
     size_t len = 0, ltmp;
-    for (char *line = NULL; (len = getline(&line, &ltmp, fp)) != -1;)
+    for (char *line = NULL; 
+        (len = getline(&line, &ltmp, fp)) != -1; 
+        ++ss.line_num)
     {
         // Strip newline
         if (line[len - 1] == '\n') line[len - 2] = '\0';
@@ -436,6 +441,23 @@ tagap_script_run_cmd_in_state(
         };
     } break;
 
+    // Environment setting for theme
+    case ATOM_ENVIRONMENT:
+    {
+        struct tagap_theme_info *t = 
+            &g_level->theme_infos[g_level->theme_info_count - 1];
+        t->env = ss->tok[0].i;
+    };
+
+    // Darkness setting for theme
+    case ATOM_DARKNESS:
+    {
+        struct tagap_theme_info *t = 
+            &g_level->theme_infos[g_level->theme_info_count - 1];
+        t->darkness[THEME_STATE_BASE] = ss->tok[0].i;
+        t->darkness[THEME_STATE_SHIFT] = ss->tok[1].i;
+    };
+
     // Begin entity definition
     case ATOM_ENTITY_START:
     {
@@ -600,10 +622,23 @@ tagap_script_run_cmd_in_state(
         struct tagap_entity_info *e =
             &g_level->entity_infos[g_level->entity_info_count - 1];
 
+        // Check for 'optional' second value
+        f32 y = 0.0f;
+        if (ss->tok_count < TAGAP_SCRIPT_COMMANDS[atom].token_count)
+        {
+            y = (f32)ss->tok[1].i;
+        }
+        else
+        {
+            // Use normal y value
+            y = (f32)ss->tok[2].i;
+        }
+
+        // Set offset values
         e->offsets[ss->tok[0].i] = (vec2s)
         {
             .x = (f32)ss->tok[1].i,
-            .y = (f32)ss->tok[2].i,
+            .y = y
         };
     } break;
 

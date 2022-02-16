@@ -6,6 +6,8 @@
 #include "tagap_script.h"
 #include "tagap_weapon.h"
 
+struct renderable;
+
 /*
  * state_level.h
  *
@@ -65,9 +67,10 @@ struct state_level
 
         // Level theme
         struct tagap_theme_info *theme;
+        struct renderable *theme_env_tex;
 
         // Current depth amount in the level
-        u32 current_depth;
+        u32 current_depth, current_entity_depth;
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are

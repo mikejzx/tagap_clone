@@ -74,6 +74,7 @@ level_reset(void)
     g_map->tmp_entity_count = 0;
 
     g_map->current_depth = 0;
+    g_map->current_entity_depth = 0;
 
     // Need to set this to zero to reset polygon point counters
     memset(g_map->polygons, 0,
@@ -154,6 +155,11 @@ level_spawn_entities()
         if (g_map->entities[i].info->think.mode != THINK_AI_USER) continue;
         entity_spawn(&g_map->entities[i]);
     }
+
+    // Add environment overlay last
+    // (Disabled until we implement a pipeline that has no depth buffer), as
+    // this overlay screws around with it a lot
+    //g_map->theme_env_tex = renderer_add_env(g_map->theme);
 }
 
 /*
@@ -188,6 +194,28 @@ level_update()
             g_state.cam_pos.y + 
                 g_vulkan->textures[g_map->layers[i].r->tex].h +
                 g_map->layers[i].offset_y,
+        };
+        // Apply parallax background effects
+        g_map->layers[i].r->tex_offset = (vec2s)
+        {
+            g_map->layers[i].scroll_speed_mul * 
+                (g_state.cam_pos.x / WIDTH_INTERNAL) * 0.5f,
+            0.0f 
+        };
+    }
+
+    // Update environment overlay quad position
+    if (g_map->theme_env_tex)
+    {
+        g_map->theme_env_tex->pos = (vec2s)
+        {
+            g_state.cam_pos.x,
+            g_state.cam_pos.y + HEIGHT_INTERNAL,
+        };
+        g_map->theme_env_tex->tex_offset = (vec2s)
+        {
+            0.0f,
+            SDL_GetTicks() / -200.0f,
         };
     }
 }

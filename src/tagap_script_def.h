@@ -43,6 +43,8 @@ enum tagap_script_atom_id
     ATOM_THEME,
     ATOM_THEME_END,
     ATOM_COLOUR,
+    ATOM_ENVIRONMENT,
+    ATOM_DARKNESS,
     ATOM_ENTITY_START,
     ATOM_ENTITY_END,
     ATOM_ENTITY_SET,
@@ -187,6 +189,34 @@ TAGAP_SCRIPT_COMMANDS[] =
         .requires_mode = true,
         .required_mode = TAGAP_PARSE_THEME,
     },
+    // Defines environment style for a theme
+    [ATOM_ENVIRONMENT] =
+    {
+        .name = "ENVIRONMENT",
+        .token_count = 1,
+        .tokens =
+        {
+            // #1: environment style name
+            { .type = TSCRIPT_TOKEN_LOOKUP, .lookup_func = lookup_tagap_env }
+        },
+        .requires_mode = true,
+        .required_mode = TAGAP_PARSE_THEME,
+    },
+    // Defines theme darkness from 0 (bright) to 4 (pitch black)
+    [ATOM_DARKNESS] =
+    {
+        .name = "ENVIRONMENT",
+        .token_count = 2,
+        .tokens =
+        {
+            // #1: base darkness
+            { .type = TSCRIPT_TOKEN_INT },
+            // #2: shifted darkness
+            { .type = TSCRIPT_TOKEN_INT },
+        },
+        .requires_mode = true,
+        .required_mode = TAGAP_PARSE_THEME,
+    },
     // Start of entity definition
     [ATOM_ENTITY_START] =
     {
@@ -323,7 +353,11 @@ TAGAP_SCRIPT_COMMANDS[] =
                 .lookup_func = lookup_tagap_think_attack
             },
             // #4: attack speed
-            { .type = TSCRIPT_TOKEN_FLOAT, },
+            { 
+                .type = TSCRIPT_TOKEN_FLOAT, 
+                // Sometimes not specified (defaults to 0)
+                .optional = true,
+            },
         },
         .requires_mode = true,
         .required_mode = TAGAP_PARSE_ENTITY,
@@ -343,7 +377,12 @@ TAGAP_SCRIPT_COMMANDS[] =
             // #2: X offset
             { .type = TSCRIPT_TOKEN_INT, },
             // #3: Y offset
-            { .type = TSCRIPT_TOKEN_INT, },
+            { 
+                .type = TSCRIPT_TOKEN_INT, 
+
+                // Some scripts don't include the second value for some reason
+                .optional = true,
+            },
         },
         .requires_mode = true,
         .required_mode = TAGAP_PARSE_ENTITY,

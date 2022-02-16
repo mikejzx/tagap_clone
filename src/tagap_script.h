@@ -95,6 +95,10 @@ struct tagap_script_state
 
     // Used for line storage
     char tmp[256];
+
+    // For debugging.  Set to -1 for non-file commands
+    i32 line_num;
+    char fname[256];
 };
 
 i32 tagap_script_run(const char *fpath);
@@ -108,6 +112,7 @@ tagap_script_new_state(struct tagap_script_state *ss)
     ss->mode = TAGAP_PARSE_NORMAL;
     ss->tok_count = 0;
     ss->has_next_mode = false;
+    ss->line_num = -1;
 }
 
 #endif

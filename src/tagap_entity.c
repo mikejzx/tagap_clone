@@ -39,7 +39,7 @@ entity_spawn(struct tagap_entity *e)
 
         // Create the sprite renderable
         e->sprites[s] = renderer_get_renderable_quad(
-            DEPTH_ENTITIES + g_map->entity_count + s / 10.0f);
+            DEPTH_ENTITIES + g_map->current_entity_depth / 10.0f);
         struct renderable *r = e->sprites[s];
 
         r->tex = spr->info->frames[0].tex;
@@ -69,6 +69,8 @@ entity_spawn(struct tagap_entity *e)
             // sprites
             r->no_cull = true;
         }
+
+        ++g_map->current_entity_depth;
     }
 
     // Temporary: give user a bunch of ammo to start with (to test different
