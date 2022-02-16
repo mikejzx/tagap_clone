@@ -16,7 +16,7 @@ void main()
         sampler2D(u_Textures[v_TexIndex], u_Sampler),
         v_Texcoord) * v_Shading;
 
-    if (colour.a < 0.25) discard;
+    if (colour.a < 0.05) discard;
 
     o_FragColour = colour;
     //o_FragColour = vec4(v_Texcoord, 0.0, 1.0);

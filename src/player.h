@@ -2,12 +2,13 @@
 #define PLAYER_H
 
 #include "types.h"
-#include "tagap_entity.h"
+
+struct tagap_entity;
 
 /*
  * player.h
  *
- * State of human-controlled players
+ * State of human-controlled players (unused currently)
  */
 
 enum PLAYER_TYPE

@@ -7,12 +7,48 @@
 struct shader 
 g_shader_list[SHADER_COUNT] =
 {
-    // Default shader used for rendering the main level stuff
+    // Default shader used for rendering polygons in the level
     [SHADER_DEFAULT] =
     {
         .name = "default",
         .pconst_size = sizeof(struct push_constants),
         .use_descriptor_sets = true,
+        .depth_test = true,
+
+        .vertex_binding_desc = (VkVertexInputBindingDescription)
+        {
+            .binding = 0,
+            .stride = sizeof(struct vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        },
+        .vertex_attr_desc =
+        {
+            // #1: vertex position
+            {
+                .binding = 0,
+                .location = 0,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
+                .offset = offsetof(struct vertex, pos),
+            },
+            // #2: texcoord
+            {
+                .binding = 0,
+                .location = 1,
+                .format = VK_FORMAT_R32G32_SFLOAT,
+                .offset = offsetof(struct vertex, texcoord),
+            },
+        },
+        .vertex_attr_count = 2,
+    },
+    // Same as default shader except this does not use depth testing; we use
+    // this for entities, etc. to allow for full proper alpha without glitching
+    // out because of the depth buffer
+    [SHADER_DEFAULT_NO_ZBUFFER] =
+    {
+        .name = "default",
+        .pconst_size = sizeof(struct push_constants),
+        .use_descriptor_sets = true,
+        .depth_test = false,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -45,6 +81,7 @@ g_shader_list[SHADER_COUNT] =
         .name = "vertexlit",
         .pconst_size = sizeof(struct push_constants_vl),
         .use_descriptor_sets = false,
+        .depth_test = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -73,19 +110,79 @@ g_shader_list[SHADER_COUNT] =
     },
 };
 
-static i32 shader_init(struct shader *);
-static VkShaderModule create_shader_module(const char *);
+struct shader_module_set
+{
+    char name[SHADER_NAME_MAX];
+    VkShaderModule vert;
+    VkShaderModule frag;
+};
+
+static i32 shader_init(struct shader *, struct shader_module_set *);
+static VkShaderModule create_shader_module(const char *, bool *);
 
 i32
 vulkan_shaders_init_all(void)
 {
-    // Setup shaders
-    for (u32 i = 0; i < SHADER_COUNT; ++i)
+    i32 status = 0;
+    u32 i;
+
+    // Read shader modules first, so we can reuse them if needed
+    struct shader_module_set *modules = 
+        malloc(sizeof(struct shader_module_set) * SHADER_COUNT);
+    u32 shader_module_count = 0;
+    for (i = 0; i < SHADER_COUNT; ++i)
     {
-        if (shader_init(&g_shader_list[i]) < 0)
-            return -1;
+        struct shader_module_set *cur_mod;
+
+        for (u32 j = 0; j < shader_module_count; ++j)
+        {
+            // Check if shader has already been loaded
+            if (strcmp(modules[j].name, g_shader_list[i].name) == 0)
+            {
+                cur_mod = &modules[j];
+                goto exists;
+            }
+        }
+
+        /*
+         * Shader not found, let's load it and add it to the list
+         */
+        char vert_path[256], frag_path[256];
+        sprintf(vert_path, "shader/%s.vert.spv", g_shader_list[i].name);
+        sprintf(frag_path, "shader/%s.frag.spv", g_shader_list[i].name);
+
+        u32 index = shader_module_count;
+        strcpy(modules[index].name, g_shader_list[i].name);
+
+        // Load vertex shader
+        bool success;
+        modules[index].vert = create_shader_module(vert_path, &success);
+        if (!success) continue;
+
+        // Load fragment shader
+        modules[index].frag = create_shader_module(frag_path, &success);
+        if (!success) continue;
+
+        cur_mod = &modules[index];
+
+        ++shader_module_count;
+
+        // Skip here if already found
+    exists:
+
+        // Actually load the shader
+        if (shader_init(&g_shader_list[i], cur_mod) < 0)
+            status = -1;
     }
-    return 0;
+
+    // Free the shader modules
+    for (i = 0; i < shader_module_count; ++i)
+    {
+        vkDestroyShaderModule(g_vulkan->d, modules[i].frag, NULL);
+        vkDestroyShaderModule(g_vulkan->d, modules[i].vert, NULL);
+    }
+
+    return status;
 }
 
 i32
@@ -105,15 +202,10 @@ vulkan_shaders_free_all(void)
 }
 
 static i32
-shader_init(struct shader *s)
+shader_init(
+    struct shader *s, 
+    struct shader_module_set *modules) 
 {
-    /* Read shaders and create modules */
-    char shader_vert_path[256], shader_frag_path[256];
-    sprintf(shader_vert_path, "shader/%s.vert.spv", s->name);
-    sprintf(shader_frag_path, "shader/%s.frag.spv", s->name);
-    VkShaderModule vert = create_shader_module(shader_vert_path);
-    VkShaderModule frag = create_shader_module(shader_frag_path);
-
     /*
      * Create shader stages
      */
@@ -121,14 +213,14 @@ shader_init(struct shader *s)
     {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = vert,
+        .module = modules->vert,
         .pName = "main",
     },
     frag_stage_info =
     {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = frag,
+        .module = modules->frag,
         .pName = "main",
     };
     const VkPipelineShaderStageCreateInfo shader_stages[] =
@@ -222,8 +314,8 @@ shader_init(struct shader *s)
     VkPipelineDepthStencilStateCreateInfo depth_info =
     {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
+        .depthTestEnable = s->depth_test ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable = s->depth_test ? VK_TRUE : VK_FALSE,
         .depthCompareOp = VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
@@ -317,16 +409,14 @@ shader_init(struct shader *s)
 
     LOG_INFO("[vulkan] shader '%s' initialised and pipeline created!", s->name);
 
-    vkDestroyShaderModule(g_vulkan->d, frag, NULL);
-    vkDestroyShaderModule(g_vulkan->d, vert, NULL);
-
     return 0;
 }
 
 static VkShaderModule
-create_shader_module(const char *path)
+create_shader_module(const char *path, bool *success)
 {
     VkShaderModule module;
+    *success = false;
 
     // Load shader from path
     FILE *fp = fopen(path, "rb");
@@ -361,5 +451,6 @@ create_shader_module(const char *path)
     }
 
     free(buf);
+    *success = true;
     return module;
 }

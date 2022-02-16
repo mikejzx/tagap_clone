@@ -28,6 +28,7 @@ struct tagap_theme_info;
 static const u32 MAX_OBJECTS[SHADER_COUNT] =
 {
     [SHADER_DEFAULT] = 1024, 
+    [SHADER_DEFAULT_NO_ZBUFFER] = 1024, 
     [SHADER_VERTEXLIT] = 128
 };
 

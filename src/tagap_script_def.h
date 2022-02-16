@@ -56,6 +56,7 @@ enum tagap_script_atom_id
     ATOM_OFFSET,
     ATOM_STAT,
     ATOM_GUNENTITY,
+    ATOM_LIGHT,
     ATOM_WEAPON,
     ATOM_LAYER,
     ATOM_TRIGGER,
@@ -414,6 +415,27 @@ TAGAP_SCRIPT_COMMANDS[] =
         {
             // #1: entity to use as weapon model
             { .type = TSCRIPT_TOKEN_ENTITY },
+        },
+        .requires_mode = true,
+        .required_mode = TAGAP_PARSE_ENTITY,
+    },
+    // Light info for an entity
+    [ATOM_LIGHT] =
+    {
+        .name = "LIGHT",
+        .token_count = 5,
+        .tokens =
+        {
+            // #1: light radius, as percentage (e.g. 0-100)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #2: light intensity, as percentage (e.g. 0-100)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #3: light colour (R)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #4: light colour (G)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #5: light colour (B)
+            { .type = TSCRIPT_TOKEN_INT },
         },
         .requires_mode = true,
         .required_mode = TAGAP_PARSE_ENTITY,

@@ -675,6 +675,25 @@ tagap_script_run_cmd_in_state(
         e->gun_entity = ss->tok[0].e;
     } break;
 
+    // Sets light on an entity
+    case ATOM_LIGHT:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        e->light = (struct tagap_entity_light)
+        {
+            .radius = (f32)ss->tok[0].i / 100.0f,
+            .intensity = (f32)ss->tok[1].i / 100.0f,
+            .colour = (vec3s)
+            {
+                (f32)ss->tok[2].i / 255.0f,
+                (f32)ss->tok[3].i / 255.0f,
+                (f32)ss->tok[3].i / 255.0f,
+            },
+        };
+    } break;
+
     // Sets a weapon slot
     case ATOM_WEAPON:
     {

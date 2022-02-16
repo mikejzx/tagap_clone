@@ -14,6 +14,9 @@ struct renderer g_renderer;
 int
 renderer_init(SDL_Window *winhandle)
 {
+    assert((sizeof(MAX_OBJECTS) / sizeof(const u32)) == SHADER_COUNT);
+    assert((sizeof(SHADER_RENDER_ORDER) / sizeof(u32)) == SHADER_COUNT);
+
     LOG_INFO("[renderer] initialising");
     memset(&g_renderer, 0, sizeof(struct renderer));
 
@@ -189,7 +192,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
     static const u32 displayed_linedef_count =
         sizeof(linfo) / sizeof(struct displayed_linedef);
 
-    for (u32 d = 0; d < displayed_linedef_count; ++d)
+    for (i32 d = displayed_linedef_count - 1; d > -1; --d)
     {
         struct displayed_linedef *info = &linfo[d];
 
@@ -313,7 +316,8 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         }
 
         // Create renderables
-        struct renderable *r = renderer_get_renderable(SHADER_DEFAULT);
+        struct renderable *r = 
+            renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
         if (r)
         {
             LOG_DBUG("[renderer] adding linedef vertex buffer "
@@ -448,7 +452,7 @@ renderer_add_trigger(struct tagap_trigger *t)
 struct renderable *
 renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre, f32 depth)
 {
-    struct renderable *r = renderer_get_renderable(SHADER_DEFAULT);
+    struct renderable *r = renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
     if (!r) return NULL;
 
     struct vertex vertices[4];
@@ -621,7 +625,8 @@ renderer_add_env(struct tagap_theme_info *theme)
     }
 
     // Create a fullscreen quad
-    struct renderable *r = renderer_get_renderable(SHADER_DEFAULT);
+    struct renderable *r = 
+        renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
     if (!r) return NULL;
 
     r->tex = tex_index;

@@ -10,6 +10,7 @@
 #define ENTITY_NAME_MAX 128
 #define ENTITY_MAX_SPRITES 32
 #define PLAYER_WEAPON_COUNT 10
+#define PLAYER_MAX_EFFECTS 10
 
 // Values that can be applied to entities
 enum tagap_entity_stat_id
@@ -26,6 +27,7 @@ enum tagap_entity_stat_id
 
     // FX stats
     STAT_FX_RENDERFIRST,
+    STAT_FX_SMOKE,
 
     // S_ stats
     STAT_S_AKIMBO,
@@ -42,6 +44,7 @@ static const char *STAT_NAMES[] =
     [STAT_DAMAGE]         = "DAMAGE",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
     [STAT_FX_RENDERFIRST] = "FX_RENDERFIRST",
+    [STAT_FX_SMOKE]       = "FX_SMOKE",
     [STAT_S_AKIMBO]       = "S_AKIMBO",
     [STAT_S_HEALTH]       = "S_HEALTH",
     [STAT_S_WEAPON]       = "S_WEAPON",
@@ -116,6 +119,14 @@ struct tagap_entity_info
     // Whether this entity has a weapon
     bool has_weapon;
 
+    // Light attached to the entity
+    struct tagap_entity_light
+    {
+        f32 radius;    // Light radius (%)
+        f32 intensity; // Light intensity (%)
+        vec3s colour;
+    } light;
+
     // NOTE: make sure to add any new members to entity_info_clone!
 };
 
@@ -142,10 +153,14 @@ entity_info_clone(
     memcpy(a->offsets, b->offsets, ENTITY_OFFSET_COUNT * sizeof(vec2s));
     a->gun_entity = b->gun_entity;
     a->has_weapon = b->has_weapon;
+    memcpy(&a->light, &b->light, sizeof(struct tagap_entity_light));
 }
 
 struct tagap_entity
 {
+    // Whether this entity is spawned in yet
+    bool is_spawned;
+
     // Pointer to the entity info
     struct tagap_entity_info *info;
 
@@ -221,9 +236,15 @@ struct tagap_entity
     {
         u16 ammo;
         struct tagap_entity *gunent;
-    } weapons[PLAYER_WEAPON_COUNT];
+        f32 reload_timer;
+        bool has_akimbo;
+    } weapons[WEAPON_SLOT_COUNT];
     i32 weapon_slot;
     f32 weapon_kick_timer;
+
+    // Effects
+    //struct tagap_entity_effect fx[ENTITY_MAX_EFFECTS];
+    //u32 fx_count;
 };
 
 void entity_spawn(struct tagap_entity *);

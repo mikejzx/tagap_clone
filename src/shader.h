@@ -13,9 +13,18 @@
 enum shader_type
 {
     SHADER_DEFAULT = 0,
+    SHADER_DEFAULT_NO_ZBUFFER, // Default without depth testing
     SHADER_VERTEXLIT,
 
     SHADER_COUNT
+};
+
+// Rendering order of shaders
+static const u32 SHADER_RENDER_ORDER[SHADER_COUNT] =
+{
+    SHADER_DEFAULT,
+    SHADER_VERTEXLIT,
+    SHADER_DEFAULT_NO_ZBUFFER,
 };
 
 /* Vertex attributes for default shader */
@@ -72,6 +81,9 @@ struct shader
 
     // Whether to use descriptor sets
     bool use_descriptor_sets;
+
+    // Whether to read/write to Z-buffer
+    bool depth_test;
 };
 
 // Shader list

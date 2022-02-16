@@ -20,6 +20,9 @@ static void create_gunent(struct tagap_entity *, bool);
 void
 entity_spawn(struct tagap_entity *e)
 {
+    // Don't spawn entities with no info or that are already spawned in
+    if (!e->info || e->is_spawned) return;
+
     // Set weapon slot
     e->weapon_slot = e->info->has_weapon ? e->info->stats[STAT_S_WEAPON] : -1;
 
@@ -42,7 +45,7 @@ entity_spawn(struct tagap_entity *e)
             DEPTH_ENTITIES + g_map->current_entity_depth / 10.0f);
         struct renderable *r = e->sprites[s];
 
-        r->tex = spr->info->frames[0].tex;
+        r->tex = spr->info->frames[spr->vars[SPRITEVAR_KEEPFRAME]].tex;
         r->pos = e->position;
         r->offset = spr->offset;
         r->pos.y *= -1.0f;
@@ -78,12 +81,14 @@ entity_spawn(struct tagap_entity *e)
 #if DEBUG
     if (e->info->think.mode == THINK_AI_USER)
     {
+        e->weapons[0].ammo = 15;
         e->weapons[1].ammo = 30;
         e->weapons[2].ammo = 40;
         e->weapons[3].ammo = 70;
         e->weapons[4].ammo = 50;
         e->weapons[5].ammo = 50;
         e->weapons[6].ammo = 50;
+        //e->weapons[0].has_akimbo = true;
     }
 #endif
 
@@ -93,7 +98,21 @@ entity_spawn(struct tagap_entity *e)
     if (e->weapon_slot >= 0) 
     {
         entity_change_weapon_slot(e, e->weapon_slot);
+
+        // Reset reload timer of all weapons
+        for (u32 i = 0; i < WEAPON_SLOT_COUNT; ++i)
+        {
+            e->weapons[i].reload_timer = -1.0f;
+        }
     }
+
+    // Create entity light
+    if (e->info->light.radius > 0.0f && 
+        e->info->light.intensity > 0.0f)
+    {
+    }
+
+    e->is_spawned = true;
 }
 
 void
@@ -115,12 +134,45 @@ entity_update(struct tagap_entity *e)
             g_state.l.weapons[e->weapon_slot].primary;
 
         // Fire weapon
-        if (e->inputs.fire && e->attack_timer > 
-            missile_info->think.attack_delay)
+        f32 attack_delay = missile_info->think.attack_delay;
+        if (e->weapon_slot == 0 && !e->weapons[0].has_akimbo)
+        {
+            attack_delay *= 2.0f;
+        }
+        if (e->weapons[e->weapon_slot].reload_timer < 0.0f &&
+            e->weapons[e->weapon_slot].ammo > 0 &&
+            e->inputs.fire && 
+            e->attack_timer > attack_delay)
         {
             entity_spawn_missile(e, missile_info);
             e->attack_timer = 0.0f;
             e->weapon_kick_timer = KICK_TIMER_MAX;
+
+            // Decrement ammo
+            --e->weapons[e->weapon_slot].ammo;
+            
+            // Begin reload
+            if (e->weapons[e->weapon_slot].ammo <= 0 &&
+                g_level->weapons[e->weapon_slot].reload_time > 0.0f)
+            {
+                e->weapons[e->weapon_slot].reload_timer = 0.0f;
+            }
+        }
+
+        // Update reload timer
+        if (e->weapons[e->weapon_slot].reload_timer >= 0.0f)
+        {
+            // Increment timer
+            e->weapons[e->weapon_slot].reload_timer += DT;
+
+            if (e->weapons[e->weapon_slot].reload_timer >=
+                g_level->weapons[e->weapon_slot].reload_time)
+            {
+                // Reload finished
+                e->weapons[e->weapon_slot].reload_timer = -1.0f;
+                e->weapons[e->weapon_slot].ammo = 
+                    g_level->weapons[e->weapon_slot].magazine_size;
+            }
         }
 
         // Update attack timer
@@ -247,20 +299,31 @@ entity_update(struct tagap_entity *e)
             if (!e->info->has_weapon) break;
 
             // Hide second weapon sprite if entity does not have akimbo
-            spr_r->hidden = true;//e->weapon_slot != 0 || 
-                //!e->info->stats[STAT_S_AKIMBO];
+            spr_r->hidden = !(e->weapon_slot == 0 && e->weapons[0].has_akimbo);
+
+            if (!spr_r->hidden) goto weapon_anim;
         } break;
         // ... falls through
         case ANIM_WEAPON:
         {
+        weapon_anim:
+            // On reload we rotate the weapon 360 degrees
+            f32 reload_angle = 0.0f;
+            if (e->weapons[e->weapon_slot].reload_timer >= 0.0f)
+            {
+                reload_angle = 
+                    (e->weapons[e->weapon_slot].reload_timer / 
+                    g_level->weapons[e->weapon_slot].reload_time) * -360.0f;
+            }
+
             // Rotate weapons to the aim angle
-            spr_rot = e->aim_angle;
+            spr_rot = e->aim_angle + reload_angle;
 
             // Apply weapon kick animation
-            f32 kick_value = KICK_AMOUNT * e->weapon_kick_timer * 
+            f32 kick_value = KICK_AMOUNT * e->weapon_kick_timer;
+            spr_pos.x += kick_value * cosf(glm_rad(e->aim_angle)) *
                 ((f32)e->flipped * 2.0f - 1.0f);
-            spr_pos.x += kick_value * cosf(glm_rad(e->aim_angle));
-            spr_pos.y += kick_value * sinf(glm_rad(e->aim_angle));
+            spr_pos.y += kick_value * -sinf(glm_rad(e->aim_angle));
 
             // Texture adjustments (only apply to the weapon owner)
             if (!e->info->has_weapon) break;
@@ -268,8 +331,7 @@ entity_update(struct tagap_entity *e)
             {
                 // Use akimbo texture frame on uzi (slot 0) if we have it
                 u32 tex_slot = e->weapon_slot + 2;
-                if (e->weapon_slot == 0 &&
-                    e->info->stats[STAT_S_AKIMBO])
+                if (e->weapon_slot == 0 && e->weapons[0].has_akimbo)
                 {
                     // Use akimbo texture
                     tex_slot = 0;
@@ -412,7 +474,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
     // No weapon
     if (e->weapon_slot < 0) return;
 
-    for (u32 w = 0; w < PLAYER_WEAPON_COUNT; ++w)
+    for (u32 w = 0; w < WEAPON_SLOT_COUNT; ++w)
     {
         // The missile contains info about what gunentity to use
         struct tagap_entity_info *missile_info =
@@ -450,11 +512,21 @@ create_gunent(struct tagap_entity *e, bool render_first)
         e->weapons[w].gunent->owner = e;
         e->weapons[w].gunent->with_owner = true;
 
-        // We need to manually spawn the entity in
-        // TODO: less dodgey fix; non-AI_USER entities will cause duplicate
-        //       gunentity.  The double-up prevention check above should be
-        //       sufficient for now though
+        // Manually spawn the entity in
         entity_spawn(e->weapons[w].gunent);
+
+        // Apply model offset
+        for (u32 s = 0; s < e->weapons[w].gunent->info->sprite_count; ++s)
+        {
+            // A bit dodgey?
+            e->weapons[w].gunent->sprites[s]->offset = (vec2s)
+            {
+                e->weapons[w].gunent->sprites[s]->offset.x + 
+                    missile_info->gun_entity->offsets[OFFSET_MODEL_OFFSET].x,
+                e->weapons[w].gunent->sprites[s]->offset.y + 
+                    missile_info->gun_entity->offsets[OFFSET_MODEL_OFFSET].y,
+            };
+        }
     }
 }
 
@@ -462,7 +534,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
 void
 entity_change_weapon_slot(struct tagap_entity *e, i32 slot)
 {
-    if (slot < 0 || slot >= PLAYER_WEAPON_COUNT)
+    if (slot < 0 || slot >= WEAPON_SLOT_COUNT)
     {
         LOG_WARN("[tagap_entity] invalid weapon slot %d", slot);
         return;
@@ -471,7 +543,7 @@ entity_change_weapon_slot(struct tagap_entity *e, i32 slot)
     e->weapon_slot = slot;
 
     // Enable the correct gunentity
-    for (u32 w = 0; w < PLAYER_WEAPON_COUNT; ++w)
+    for (u32 w = 0; w < WEAPON_SLOT_COUNT; ++w)
     {
         if (!e->weapons[w].gunent) continue;
 

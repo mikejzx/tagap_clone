@@ -99,6 +99,15 @@ entity_think_user(struct tagap_entity *e)
         }
         entity_change_weapon_slot(e, new_slot);
     }
+
+#ifdef DEBUG
+    // Debug controls for fast movement across the map
+    const f32 god_mode_speed = 2000.0f * DT;
+    if (g_state.kb_state[SDL_SCANCODE_H]) e->position.x -= god_mode_speed;
+    if (g_state.kb_state[SDL_SCANCODE_J]) e->position.y -= god_mode_speed / 2.0f;
+    if (g_state.kb_state[SDL_SCANCODE_K]) e->position.y += god_mode_speed / 2.0f;
+    if (g_state.kb_state[SDL_SCANCODE_L]) e->position.x += god_mode_speed;
+#endif
 }
 
 static void 

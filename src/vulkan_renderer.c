@@ -778,6 +778,9 @@ vulkan_record_command_buffers(
     size_t objgrp_count,
     vec3s *cam_pos)
 {
+#ifdef DEBUG
+    assert(objgrp_count == SHADER_COUNT);
+#endif
     VkCommandBuffer cbuf = g_vulkan->cmd_buffers[cur_image_index];
 
     // Reset the command buffer
@@ -825,14 +828,18 @@ vulkan_record_command_buffers(
     g_state.draw_calls = 0;
 
     // Iterate over each of the groups (i.e. objects with different shaders)
-    for (u32 g = 0; g < objgrp_count; ++g)
+    for (u32 g = 0; g < SHADER_COUNT; ++g)
     {
-        struct renderable *objs = objgrps[g].objs;
-        u32 obj_count = objgrps[g].obj_count;
+        u32 shader_id = SHADER_RENDER_ORDER[g];
+        struct renderable *objs = objgrps[shader_id].objs;
+        u32 obj_count = objgrps[shader_id].obj_count;
+
+        // If Skip if there's no objects to render in this group
+        if (obj_count == 0) continue;
 
         // Bind the graphics pipeline for this shader
         vkCmdBindPipeline(cbuf,
-            VK_PIPELINE_BIND_POINT_GRAPHICS, g_shader_list[g].pipeline);
+            VK_PIPELINE_BIND_POINT_GRAPHICS, g_shader_list[shader_id].pipeline);
 
         // Render each object
         for (i32 o = 0; o < obj_count; ++o)
@@ -851,7 +858,7 @@ vulkan_record_command_buffers(
 
             // Render the object
             vulkan_record_obj_command_buffer(cbuf, 
-                &objs[o], &g_shader_list[g], g, cam_pos);
+                &objs[o], &g_shader_list[shader_id], shader_id, cam_pos);
         }
     }
 
@@ -940,7 +947,7 @@ vulkan_record_obj_command_buffer(
         : GLMS_VEC4_ONE;
 
     // A bit dodgey but works
-    if (shader_id == SHADER_DEFAULT)
+    if (shader_id == SHADER_DEFAULT || shader_id == SHADER_DEFAULT_NO_ZBUFFER)
     {
         struct push_constants p =
         {

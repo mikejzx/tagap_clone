@@ -160,6 +160,16 @@ level_spawn_entities()
     // (Disabled until we implement a pipeline that has no depth buffer), as
     // this overlay screws around with it a lot
     //g_map->theme_env_tex = renderer_add_env(g_map->theme);
+
+    // Set reload timers for weapons (as the original game seems to only
+    // support reloading for slot 0)
+    for (u32 i = 0; i < WEAPON_SLOT_COUNT; ++i)
+    {
+        g_level->weapons[i].reload_time = 0.0f;
+        g_level->weapons[i].magazine_size = -1;
+    }
+    g_level->weapons[0].reload_time = 0.5f;
+    g_level->weapons[0].magazine_size = 15;
 }
 
 /*
