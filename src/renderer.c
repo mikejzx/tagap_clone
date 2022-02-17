@@ -117,7 +117,7 @@ renderer_add_polygon(struct tagap_polygon *p)
         (f32)g_vulkan->textures[tex_index].w,
         (f32)g_vulkan->textures[tex_index].h,
     };
-    r->is_shaded = p->tex_is_shaded;
+    SET_BIT(r->flags, RENDERABLE_SHADED_BIT, p->tex_is_shaded);
 
     r->bounds.min.x = FLT_MAX;
     r->bounds.min.y = FLT_MAX;
@@ -324,7 +324,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
                 "(style %d) with %d lines", info->style, cur_l);
             memset(r, 0, sizeof(struct renderable));
             r->tex = tex_index;
-            r->no_cull = true;
+            r->flags |= RENDERABLE_NO_CULL_BIT;
             vb_new(&r->vb, info->v, info->v_size);
             ib_new(&r->ib, info->i, info->i_size);
         }
@@ -363,8 +363,7 @@ renderer_add_layer(struct tagap_layer *l, i32 z_offset)
         (f32)g_vulkan->textures[tex_index].w,
         (f32)g_vulkan->textures[tex_index].h,
     };
-    r->is_shaded = true;
-    r->no_cull = true;
+    r->flags |= RENDERABLE_NO_CULL_BIT | RENDERABLE_SHADED_BIT;
 
     f32 w = WIDTH_INTERNAL; 
     f32 h = tex_size.y;
@@ -536,7 +535,7 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
 {
     // Get renderable
     struct renderable *r = renderer_get_renderable(SHADER_VERTEXLIT);
-    r->is_shaded = p->tex_is_shaded;
+    SET_BIT(r->flags, RENDERABLE_SHADED_BIT, p->tex_is_shaded);
 
     r->bounds.min.x = FLT_MAX;
     r->bounds.min.y = FLT_MAX;
@@ -635,9 +634,9 @@ renderer_add_env(struct tagap_theme_info *theme)
         (f32)g_vulkan->textures[tex_index].w * 1.5f,
         (f32)g_vulkan->textures[tex_index].h * 1.5f,
     };
-    r->no_cull = true;
-    r->is_shaded = true;
-    r->use_extra_shading = true;
+    r->flags |= RENDERABLE_NO_CULL_BIT | 
+        RENDERABLE_SHADED_BIT | 
+        RENDERABLE_EXTRA_SHADING_BIT;
     r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.25f};
 
     f32 w = WIDTH, h = HEIGHT, depth = DEPTH_ENV;

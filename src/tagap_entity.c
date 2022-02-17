@@ -55,22 +55,22 @@ entity_spawn(struct tagap_entity *e)
             spr->vars[SPRITEVAR_AIM])
         {
             r->rot = e->aim_angle;
-            r->flipped = false;
+            r->flags &= ~RENDERABLE_FLIPPED_BIT;
         }
         else
         {
             r->rot = 0;
-            r->flipped = !!e->facing;
+            SET_BIT(r->flags, RENDERABLE_FLIPPED_BIT, !!e->facing);
         }
 
         // We want the renderer to do the scaling for us on sprites
-        r->tex_scale = true;
+        r->flags |= RENDERABLE_TEX_SCALE_BIT;
 
         if (e->info->think.mode == THINK_AI_USER)
         {
             // Don't waste CPU cycles doing culling calculations on player
             // sprites
-            r->no_cull = true;
+            r->flags |= RENDERABLE_NO_CULL_BIT;
         }
 
         ++g_map->current_entity_depth;
@@ -289,7 +289,7 @@ entity_update(struct tagap_entity *e)
         f32 spr_rot =  entity_get_rot(e) + sprite_rot_offset;
 
         // Flip sprites based on entity facing
-        spr_r->flipped = e->flipped;
+        SET_BIT(spr_r->flags, RENDERABLE_FLIPPED_BIT, e->flipped);
 
         // Update sprite positions
         switch(spr->anim)
@@ -299,9 +299,11 @@ entity_update(struct tagap_entity *e)
             if (!e->info->has_weapon) break;
 
             // Hide second weapon sprite if entity does not have akimbo
-            spr_r->hidden = !(e->weapon_slot == 0 && e->weapons[0].has_akimbo);
+            SET_BIT(spr_r->flags, 
+                RENDERABLE_HIDDEN_BIT, 
+                !(e->weapon_slot == 0 && e->weapons[0].has_akimbo));
 
-            if (!spr_r->hidden) goto weapon_anim;
+            if (!(spr_r->flags & RENDERABLE_HIDDEN_BIT)) goto weapon_anim;
         } break;
         // ... falls through
         case ANIM_WEAPON:
@@ -339,19 +341,24 @@ entity_update(struct tagap_entity *e)
                 if (tex_slot < spr->info->frame_count)
                 {
                     spr_r->tex = spr->info->frames[tex_slot].tex;
-                    if (spr->anim != ANIM_WEAPON2) spr_r->hidden = false;
+                    if (spr->anim != ANIM_WEAPON2) 
+                    {
+                        // Remove hidden flag from weapon1 texture
+                        spr_r->flags &= ~RENDERABLE_HIDDEN_BIT;
+                    }
                 }
                 else
                 {
+                    // Hide the texture
                     spr_r->tex = spr->info->frames[0].tex;
-                    spr_r->hidden = true;
+                    spr_r->flags |= RENDERABLE_HIDDEN_BIT;
                 }
             }
             else
             {
-                // Gun entity
+                // Gun entity texture (unhide it)
                 spr_r->tex = spr->info->frames[0].tex;
-                spr_r->hidden = false;
+                spr_r->flags &= ~RENDERABLE_HIDDEN_BIT;
             }
         } break;
 
@@ -461,7 +468,7 @@ entity_set_inactive_hidden(struct tagap_entity *e, bool h)
     e->active = !h;
     for (u32 i = 0; i < e->info->sprite_count; ++i)
     {
-        e->sprites[i]->hidden = h;
+        SET_BIT(e->sprites[i]->flags, RENDERABLE_HIDDEN_BIT, h);
     }
 }
 

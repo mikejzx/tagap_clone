@@ -32,24 +32,29 @@ static const u32 MAX_OBJECTS[SHADER_COUNT] =
     [SHADER_VERTEXLIT] = 128
 };
 
+enum renderable_flag
+{
+    RENDERABLE_NO_FLAGS = 0,
+    RENDERABLE_HIDDEN_BIT = 1,
+    RENDERABLE_NO_CULL_BIT = 2,
+    RENDERABLE_SHADED_BIT = 4,
+    RENDERABLE_TEX_SCALE_BIT = 8,
+    RENDERABLE_FLIPPED_BIT = 16,
+    RENDERABLE_EXTRA_SHADING_BIT = 32,
+};
+
 struct renderable
 {
-    // TODO: bitmask for booleans
-
-    bool hidden;
-    bool tex_scale;
-    bool is_shaded;
+    enum renderable_flag flags;
     struct vbuffer vb;
     struct ibuffer ib;
     i32 tex;
     vec2s pos;
     vec2s offset;
     f32 rot;
-    bool flipped;
     vec2s tex_offset;
 
     // Additional shading multiplier
-    bool use_extra_shading;
     vec4s extra_shading;
 
     // For culling objects outside of the viewport
@@ -57,7 +62,6 @@ struct renderable
     {
         vec2s min, max;
     } bounds;
-    bool no_cull;
 };
 
 struct renderer

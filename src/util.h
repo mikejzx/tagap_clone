@@ -1,6 +1,21 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+/*
+ * Set a flag on a bitfield (useful for when toggling based on a boolean)
+ */
+#define SET_BIT(b, flag, state) \
+    ({ \
+        if (state) \
+        { \
+            b |= flag; \
+        } \
+        else \
+        { \
+            b &= ~flag; \
+        } \
+    })
+
 // Useful macro to create lookup functions for enum types
 // Also contains an assert to avoid serious issues
 #define CREATE_LOOKUP_FUNC(func_name, names, count) \

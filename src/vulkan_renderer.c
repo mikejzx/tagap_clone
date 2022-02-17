@@ -845,7 +845,7 @@ vulkan_record_command_buffers(
         for (i32 o = 0; o < obj_count; ++o)
         {
             // Skip hidden objects
-            if (objs[o].hidden) continue;
+            if (objs[o].flags & RENDERABLE_HIDDEN_BIT) continue;
 
             // Cull objects that have bounds outside the viewport
             // Extremely effective at more than doubling the FPS
@@ -895,7 +895,8 @@ vulkan_record_obj_command_buffer(
         IB_VKTYPE);
 
     // Put MVP in push constants
-    f32 flip_sign = -((f32)obj->flipped * 2.0f - 1.0f);
+    f32 flip_sign = -((f32)!!(obj->flags & 
+        RENDERABLE_FLIPPED_BIT) * 2.0f - 1.0f);
     mat4s m_m = (mat4s)GLMS_MAT4_IDENTITY_INIT;
 
     // Apply object position
@@ -912,7 +913,7 @@ vulkan_record_obj_command_buffer(
         // Apply object rotation
         m_m = glms_rotate_z(m_m, glm_rad(obj->rot));
     }
-    if (obj->tex_scale)
+    if (obj->flags & RENDERABLE_TEX_SCALE_BIT)
     {
         // Scale the object by texture size
         m_m = glms_scale(m_m, (vec3s)
@@ -936,13 +937,13 @@ vulkan_record_obj_command_buffer(
 
     // World darkness value; this is constant for now but are defined by
     // DARKNESS theme command
-    f32 dim = (obj->is_shaded ? 0.70f : 1.0f) * 
+    f32 dim = ((obj->flags & RENDERABLE_SHADED_BIT) ? 0.70f : 1.0f) * 
         theme_get_darkness_value(g_map->theme->darkness[THEME_STATE_BASE]);
     size_t pconst_size = s->pconst_size;
     void *pconsts = alloca(pconst_size);
 
     // Additional shading multiplier
-    vec4s extra = obj->use_extra_shading 
+    vec4s extra = (obj->flags & RENDERABLE_EXTRA_SHADING_BIT)
         ? obj->extra_shading 
         : GLMS_VEC4_ONE;
 
@@ -1006,7 +1007,7 @@ vulkan_record_obj_command_buffer(
 static bool
 vulkan_check_should_cull_obj(struct renderable *o, vec3s *cam_pos)
 {
-    if (o->no_cull)
+    if (o->flags & RENDERABLE_NO_CULL_BIT)
     {
         return false;
     }
@@ -1029,7 +1030,7 @@ vulkan_check_should_cull_obj(struct renderable *o, vec3s *cam_pos)
         }},
     };
     struct bounds obj_bounds;
-    if (!o->tex_scale)
+    if (!(o->flags & RENDERABLE_TEX_SCALE_BIT))
     {
         obj_bounds = (struct bounds)
         {
