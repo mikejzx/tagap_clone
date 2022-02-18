@@ -8,6 +8,7 @@
 #include "tagap_theme.h"
 #include "vulkan_renderer.h"
 #include "shader.h"
+#include "particle.h"
 
 struct renderer g_renderer;
 
@@ -29,6 +30,7 @@ renderer_init(SDL_Window *winhandle)
             malloc(MAX_OBJECTS[i] * sizeof(struct renderable));
     }
 
+    particles_init();
 
     return 0;
 }
@@ -38,6 +40,8 @@ renderer_deinit(void)
 {
     LOG_INFO("[renderer] deinitialising");
     vulkan_renderer_wait_for_idle();
+
+    particles_deinit();
 
     // Free object vertex and index buffers
     for (u32 i = 0; i < SHADER_COUNT; ++i)
@@ -61,6 +65,8 @@ renderer_deinit(void)
 void
 renderer_render(vec3s *cam_pos)
 {
+    particles_update();
+
     // Record command buffers and render
     vulkan_render_frame_pre();
     vulkan_record_command_buffers(
@@ -73,9 +79,10 @@ renderer_render(vec3s *cam_pos)
 struct renderable *
 renderer_get_renderable(enum shader_type shader)
 {
-    if (g_renderer.objgroups[shader].obj_count + 1 >= MAX_OBJECTS[shader])
+    if (g_renderer.objgroups[shader].obj_count + 1 > MAX_OBJECTS[shader])
     {
-        LOG_ERROR("[renderer] object capacity exceeded!");
+        LOG_ERROR("[renderer] object capacity exceeded for shader '%d'!", 
+            g_shader_list[shader].name);
         return NULL;
     }
     struct renderable *r = &g_renderer.objgroups[shader].objs[

@@ -69,6 +69,28 @@ fail:
     return -1;
 }
 
+/* Create empty vertex buffer */
+i32 
+vb_new_empty(struct vbuffer *vb, size_t size)
+{
+    memset(vb, 0, sizeof(struct vbuffer));
+
+    if (vulkan_create_buffer(
+        (VkDeviceSize)size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &vb->vk_buffer, &vb->vma_alloc) < 0)
+    {
+        LOG_ERROR("[vbuffer] failed to create vertex buffer");
+        return -1;
+    }
+
+    vb->size = size;
+
+    return 0;
+}
+
 void
 vb_free(struct vbuffer *vb)
 {

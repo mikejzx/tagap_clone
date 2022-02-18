@@ -14,6 +14,7 @@ enum shader_type
 {
     SHADER_DEFAULT = 0,
     SHADER_DEFAULT_NO_ZBUFFER, // Default without depth testing
+    SHADER_PARTICLE,
     SHADER_VERTEXLIT,
 
     SHADER_COUNT
@@ -25,6 +26,7 @@ static const u32 SHADER_RENDER_ORDER[SHADER_COUNT] =
     SHADER_DEFAULT,
     SHADER_VERTEXLIT,
     SHADER_DEFAULT_NO_ZBUFFER,
+    SHADER_PARTICLE,
 };
 
 /* Vertex attributes for default shader */
@@ -58,6 +60,26 @@ struct push_constants
 
 // Push constants for vertexlit shader
 struct push_constants_vl
+{
+    // Only need MVP; any shading can be done on vertices directly
+    mat4s mvp;
+};
+
+/* Vertex attributes for particle shader */
+struct vertex_ptl
+{
+    // Position of particle
+    vec2s pos;
+
+    // Opacity of particle
+    f32 opacity;
+
+    // Texture index of particle
+    i32 tex_index;
+};
+
+// Push constants for particle shader
+struct push_constants_ptl
 {
     // Only need MVP; any shading can be done on vertices directly
     mat4s mvp;

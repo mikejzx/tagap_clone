@@ -4,6 +4,7 @@
 #include "tagap_sprite.h"
 #include "tagap_entity_think.h"
 #include "tagap_entity_movetype.h"
+#include "tagap_weapon.h"
 #include "collision.h"
 #include "entity_pool.h"
 

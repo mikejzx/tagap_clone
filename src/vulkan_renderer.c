@@ -847,6 +847,9 @@ vulkan_record_command_buffers(
             // Skip hidden objects
             if (objs[o].flags & RENDERABLE_HIDDEN_BIT) continue;
 
+            // Skip objects with no indices
+            if (objs[o].ib.index_count == 0) continue;
+
             // Cull objects that have bounds outside the viewport
             // Extremely effective at more than doubling the FPS
         #ifndef NO_CULLING
@@ -968,7 +971,7 @@ vulkan_record_obj_command_buffer(
         };
         memcpy(pconsts, &p, pconst_size);
     }
-    else if (shader_id == SHADER_VERTEXLIT)
+    else if (shader_id == SHADER_VERTEXLIT || shader_id == SHADER_PARTICLE)
     {
         struct push_constants_vl p =
         {
@@ -998,7 +1001,7 @@ vulkan_record_obj_command_buffer(
 
     // Draw!
     vkCmdDrawIndexed(cbuf,
-        obj->ib.size / sizeof(IB_TYPE),
+        obj->ib.index_count,
         1, 0, 0, 0);
     ++g_state.draw_calls;
 }

@@ -108,6 +108,46 @@ g_shader_list[SHADER_COUNT] =
         },
         .vertex_attr_count = 2,
     },
+    // Particle rendering shader
+    [SHADER_PARTICLE] =
+    {
+        .name = "particle",
+        .pconst_size = sizeof(struct push_constants_ptl),
+        .use_descriptor_sets = true,
+        .depth_test = false,
+
+        .vertex_binding_desc = (VkVertexInputBindingDescription)
+        {
+            .binding = 0,
+            .stride = sizeof(struct vertex_ptl),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        },
+        .vertex_attr_desc =
+        {
+            // #1: vertex position
+            {
+                .binding = 0,
+                .location = 0,
+                .format = VK_FORMAT_R32G32_SFLOAT,
+                .offset = offsetof(struct vertex_ptl, pos),
+            },
+            // #2: opacity
+            {
+                .binding = 0,
+                .location = 1,
+                .format = VK_FORMAT_R32_SFLOAT,
+                .offset = offsetof(struct vertex_ptl, opacity),
+            },
+            // #3: texture index
+            {
+                .binding = 0,
+                .location = 2,
+                .format = VK_FORMAT_R32_UINT,
+                .offset = offsetof(struct vertex_ptl, tex_index),
+            },
+        },
+        .vertex_attr_count = 3,
+    },
 };
 
 struct shader_module_set

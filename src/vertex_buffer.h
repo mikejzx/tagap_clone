@@ -15,6 +15,7 @@ struct vbuffer
 };
 
 i32 vb_new(struct vbuffer *, const void *, size_t);
+i32 vb_new_empty(struct vbuffer *, size_t);
 void vb_free(struct vbuffer *);
 
 #endif

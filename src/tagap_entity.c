@@ -6,6 +6,7 @@
 #include "vulkan_renderer.h"
 #include "state_level.h"
 #include "entity_pool.h"
+#include "particle_emitter.h"
 
 #define KICK_TIMER_MAX (0.1f)
 #define KICK_AMOUNT (16.0f)
@@ -106,18 +107,14 @@ entity_spawn(struct tagap_entity *e)
         }
     }
 
-    // Create entity light
-    if (e->info->light.radius > 0.0f && 
-        e->info->light.intensity > 0.0f)
-    {
-    }
-
     e->is_spawned = true;
 }
 
 void
 entity_update(struct tagap_entity *e)
 {
+    if (!e->active) return;
+
     // Reset collision result
     memset(&e->collision, 0, sizeof(struct collision_result));
 
@@ -397,6 +394,9 @@ entity_update(struct tagap_entity *e)
         spr_r->pos.y *= -1.0f;
         spr_r->rot = spr_rot;
     }
+
+    // Apply particle effects
+    entity_apply_particle_fx(e);
 }
 
 void

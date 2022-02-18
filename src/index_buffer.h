@@ -12,6 +12,10 @@ struct ibuffer
     VkBuffer vk_buffer;
     VmaAllocation vma_alloc;
     size_t size;
+    
+    // Indices we want to draw
+    u32 index_count;
+    u32 first_index;
 };
 
 i32 ib_new(struct ibuffer *, const void *, size_t);

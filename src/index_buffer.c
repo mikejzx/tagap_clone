@@ -61,6 +61,8 @@ ib_new(struct ibuffer *ib, const void *indices, size_t size)
     vmaDestroyBuffer(g_vulkan->vma, staging_buf, staging_buf_alloc);
 
     ib->size = size;
+    ib->index_count = size / sizeof(IB_TYPE);
+    ib->first_index = 0;
 
     return 0;
 

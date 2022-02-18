@@ -29,7 +29,8 @@ static const u32 MAX_OBJECTS[SHADER_COUNT] =
 {
     [SHADER_DEFAULT] = 1024, 
     [SHADER_DEFAULT_NO_ZBUFFER] = 1024, 
-    [SHADER_VERTEXLIT] = 128
+    [SHADER_VERTEXLIT] = 128,
+    [SHADER_PARTICLE] = 1,
 };
 
 enum renderable_flag
