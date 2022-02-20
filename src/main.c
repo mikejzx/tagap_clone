@@ -39,7 +39,8 @@ main (i32 argc, char **argv)
         "TAGAP Clone",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         WIDTH, HEIGHT,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
+        SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN 
+        /*| SDL_WINDOW_FULLSCREEN_DESKTOP*/);
     if (!win_handle)
     {
         LOG_ERROR("failed to create window handle.  Perhaps libsdl2 was "

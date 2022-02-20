@@ -159,7 +159,7 @@ level_spawn_entities()
     // Add environment overlay last
     // (Disabled until we implement a pipeline that has no depth buffer), as
     // this overlay screws around with it a lot
-    //g_map->theme_env_tex = renderer_add_env(g_map->theme);
+    g_map->theme_env_tex = renderer_add_env(g_map->theme);
 
     // Set reload timers for weapons (as the original game seems to only
     // support reloading for slot 0)
@@ -222,11 +222,7 @@ level_update()
             g_state.cam_pos.x,
             g_state.cam_pos.y + HEIGHT_INTERNAL,
         };
-        g_map->theme_env_tex->tex_offset = (vec2s)
-        {
-            0.0f,
-            SDL_GetTicks() / -200.0f,
-        };
+        g_map->theme_env_tex->tex_offset.y -= DT * 4.0f;
     }
 }
 

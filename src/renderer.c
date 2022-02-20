@@ -194,10 +194,26 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         // List of linedefs styles that we actually draw
         { LINEDEF_STYLE_FLOOR, "(world-floor)", 0, 0, 0, 0 },
         { LINEDEF_STYLE_PLATE_FLOOR, "(world-plate)", 0, 0, 0, 0 },
-        // Don't draw ceilings
+        { LINEDEF_STYLE_PLATE_CEILING, "(world-plate)", 0, 0, 0, 0 },
     };
+
+    struct displayed_faded_linedef
+    {
+        enum tagap_linedef_style style;
+        struct vertex_vl *v;
+        IB_TYPE *i;
+        size_t v_size, i_size;
+        f32 height;
+    } linfo_faded[] =
+    {
+        // List of linedefs to render with a 'fade' shader instead of a texture
+        { .style = LINEDEF_STYLE_CEILING, .height = 16.0f }
+    };
+
     static const u32 displayed_linedef_count =
         sizeof(linfo) / sizeof(struct displayed_linedef);
+    static const u32 displayed_faded_linedef_count =
+        sizeof(linfo_faded) / sizeof(struct displayed_faded_linedef);
 
     for (i32 d = displayed_linedef_count - 1; d > -1; --d)
     {
@@ -331,6 +347,104 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
                 "(style %d) with %d lines", info->style, cur_l);
             memset(r, 0, sizeof(struct renderable));
             r->tex = tex_index;
+            r->flags |= RENDERABLE_NO_CULL_BIT;
+            vb_new(&r->vb, info->v, info->v_size);
+            ib_new(&r->ib, info->i, info->i_size);
+        }
+
+        // Cleanup
+        free(info->v);
+        free(info->i);
+    }
+
+    // Now handle the fade linedefs
+    for (i32 d = 0; d < displayed_faded_linedef_count; ++d)
+    {
+        struct displayed_faded_linedef *info = &linfo_faded[d];
+
+        // Count number of linedefs of this style
+        u32 i;
+        for (i = 0; i < lc; ++i)
+        {
+            if (ldefs[i].style != info->style) continue;
+            if (ldefs[i].start.x == ldefs[i].end.x) continue;
+            info->v_size += 4 * sizeof(struct vertex_vl);
+            info->i_size += 6 * sizeof(IB_TYPE);
+        }
+        if (!info->v_size || !info->i_size)
+        {
+            LOG_WARN("[renderer] skipping faded linedef style %d as "
+                "it has no lines", info->style);
+            continue;
+        }
+
+        // Allocate buffers
+        info->v = malloc(info->v_size);
+        info->i = malloc(info->i_size);
+
+        // Fill buffers
+        u32 cur_l = 0;
+        for (u32 i = 0; i < lc; ++i)
+        {
+            struct tagap_linedef *l = &ldefs[i];
+            if (l->style != info->style) continue;
+            if (ldefs[i].start.x == ldefs[i].end.x) continue;
+
+            // Top left
+            info->v[cur_l * 4 + 0] = (struct vertex_vl)
+            {
+                .pos = (vec3s) 
+                { 
+                    l->start.x, l->start.y + info->height, DEPTH_LINEDEFS 
+                },
+                .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 0.0f, },
+            };
+            // Top right
+            info->v[cur_l * 4 + 1] = (struct vertex_vl)
+            {
+                .pos = (vec3s) 
+                { 
+                    l->end.x, l->end.y + info->height, DEPTH_LINEDEFS 
+                },
+                .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 0.0f, },
+            };
+            // Bottom right
+            info->v[cur_l * 4 + 2] = (struct vertex_vl)
+            {
+                .pos = (vec3s) 
+                { 
+                    l->end.x, l->end.y, DEPTH_LINEDEFS 
+                },
+                .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 1.0f, },
+            };
+            // Bottom left
+            info->v[cur_l * 4 + 3] = (struct vertex_vl)
+            {
+                .pos = (vec3s) 
+                { 
+                    l->start.x, l->start.y, DEPTH_LINEDEFS 
+                },
+                .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 1.0f, },
+            };
+
+            info->i[cur_l * 6 + 0] = cur_l * 4;
+            info->i[cur_l * 6 + 1] = cur_l * 4 + 1;
+            info->i[cur_l * 6 + 2] = cur_l * 4 + 2;
+            info->i[cur_l * 6 + 3] = cur_l * 4;
+            info->i[cur_l * 6 + 4] = cur_l * 4 + 2;
+            info->i[cur_l * 6 + 5] = cur_l * 4 + 3;
+
+            ++cur_l;
+        }
+
+        // Create renderables
+        struct renderable *r =
+            renderer_get_renderable(SHADER_VERTEXLIT);
+        if (r)
+        {
+            LOG_DBUG("[renderer] adding faded linedef vertex buffer "
+                "(style %d) with %d lines", info->style, cur_l);
+            memset(r, 0, sizeof(struct renderable));
             r->flags |= RENDERABLE_NO_CULL_BIT;
             vb_new(&r->vb, info->v, info->v_size);
             ib_new(&r->ib, info->i, info->i_size);
@@ -682,7 +796,7 @@ renderer_add_env(struct tagap_theme_info *theme)
     r->flags |= RENDERABLE_NO_CULL_BIT |
         RENDERABLE_SHADED_BIT |
         RENDERABLE_EXTRA_SHADING_BIT;
-    r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.25f};
+    r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.20f};
 
     f32 w = WIDTH, h = HEIGHT, depth = DEPTH_ENV;
 
@@ -700,7 +814,7 @@ renderer_add_env(struct tagap_theme_info *theme)
         .pos      = (vec3s) { w, h, depth },
         .texcoord = (vec2s)
         {
-             w / tex_size.x,
+             w / tex_size.x * 1.35f,
              0.0f
         },
     };
@@ -710,8 +824,8 @@ renderer_add_env(struct tagap_theme_info *theme)
         .pos      = (vec3s) { w, 0.0f, depth },
         .texcoord = (vec2s)
         {
-             w / tex_size.x,
-             h / tex_size.y,
+             w / tex_size.x * 1.35f,
+             h / tex_size.y / 6.8f,
         },
     };
     // Bottom left
@@ -721,7 +835,7 @@ renderer_add_env(struct tagap_theme_info *theme)
         .texcoord = (vec2s)
         {
              0.0f,
-             h / tex_size.y,
+             h / tex_size.y / 6.8f,
         },
     };
     static const IB_TYPE indices[3 * 4] =

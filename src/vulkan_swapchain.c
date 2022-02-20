@@ -46,22 +46,25 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
 
     /*
      * Choose swapchain present mode
-     * (Fallback to FIFO mode (Vsync) which is apparently guaranteed)
+     * FIFO mode (vsync) is guaranteed to be supported
      */
-    VkPresentModeKHR pmode = VK_PRESENT_MODE_FIFO_KHR;
-#if 1
-    for (i32 i = 0; i < details.present_mode_count; ++i)
+    VkPresentModeKHR pmode = VSYNC 
+        ? VK_PRESENT_MODE_FIFO_KHR 
+        : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    if (TRIPLE_BUFFERING)
     {
-        // Prefer mailbox (triple-buffering) mode
-        if (details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+        for (i32 i = 0; i < details.present_mode_count; ++i)
         {
-            LOG_DBUG("[vulkan] using swapchain mode "
-                "VK_PRESENT_MODE_MAILBOX_KHR");
-            pmode = VK_PRESENT_MODE_MAILBOX_KHR;
-            break;
+            // Use mailbox if suppored
+            if (details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                LOG_DBUG("[vulkan] using swapchain mode "
+                    "VK_PRESENT_MODE_MAILBOX_KHR");
+                pmode = VK_PRESENT_MODE_MAILBOX_KHR;
+                break;
+            }
         }
     }
-#endif
 
     /*
      * Choose swapchain extent
@@ -120,12 +123,21 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
 //#endif
 
     // Choose how many images to have in swapchain
-    u32 image_count = details.capabilities.minImageCount + 1;
+    u32 image_count = VSYNC 
+        ? (pmode == VK_PRESENT_MODE_MAILBOX_KHR ? 3 : 2)
+        : details.capabilities.minImageCount;
+
+    // Clamp the image count
     if (details.capabilities.maxImageCount > 0 &&
         image_count > details.capabilities.maxImageCount)
     {
         // Clamp image count to maximum
         image_count = details.capabilities.maxImageCount;
+    }
+    if (image_count < details.capabilities.minImageCount)
+    {
+        // Clamp image count to minimum
+        image_count = details.capabilities.minImageCount;
     }
 
     // Populate swapchain structure
@@ -189,7 +201,8 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     vkGetSwapchainImagesKHR(g_vulkan->d,
         swapchain->handle, &schain_image_count, swapchain->images);
 
-    LOG_DBUG("[vulkan] got %d swapchain images", swapchain->image_count);
+    LOG_DBUG("[vulkan] got %d swapchain images (vsync:%d triple buffering:%d)", 
+        swapchain->image_count, VSYNC, TRIPLE_BUFFERING);
 
     /*
      * Create image views

@@ -1244,7 +1244,7 @@ vulkan_record_obj_command_buffer(
     if (shader_id == SHADER_DEFAULT || shader_id == SHADER_DEFAULT_NO_ZBUFFER)
     {
         // Shading multiplier
-        f32 dim = (obj->flags & RENDERABLE_SHADED_BIT) ? 0.70f : 1.0f;
+        f32 dim = (obj->flags & RENDERABLE_SHADED_BIT) ? 0.60f : 1.0f;
         vec4s shading =
             (obj->flags & RENDERABLE_EXTRA_SHADING_BIT)
             ? obj->extra_shading

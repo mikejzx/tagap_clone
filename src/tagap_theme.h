@@ -58,7 +58,7 @@ theme_get_darkness_value(i32 darkness)
     static const f32 DARKNESS_VALUES[4] =
     {
         1.0f,
-        0.50f,
+        0.60f,
         0.25f,
         0.00f,
     };
