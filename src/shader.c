@@ -4,7 +4,7 @@
 #include "vulkan_swapchain.h"
 
 // List of shaders used in the game
-struct shader 
+struct shader
 g_shader_list[SHADER_COUNT] =
 {
     // Default shader used for rendering polygons in the level
@@ -14,6 +14,7 @@ g_shader_list[SHADER_COUNT] =
         .pconst_size = sizeof(struct push_constants),
         .use_descriptor_sets = true,
         .depth_test = true,
+        .blending = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -49,6 +50,7 @@ g_shader_list[SHADER_COUNT] =
         .pconst_size = sizeof(struct push_constants),
         .use_descriptor_sets = true,
         .depth_test = false,
+        .blending = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -82,6 +84,7 @@ g_shader_list[SHADER_COUNT] =
         .pconst_size = sizeof(struct push_constants_vl),
         .use_descriptor_sets = false,
         .depth_test = true,
+        .blending = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -115,6 +118,7 @@ g_shader_list[SHADER_COUNT] =
         .pconst_size = sizeof(struct push_constants_ptl),
         .use_descriptor_sets = true,
         .depth_test = false,
+        .blending = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -148,6 +152,49 @@ g_shader_list[SHADER_COUNT] =
         },
         .vertex_attr_count = 3,
     },
+    // Light rendering shader
+    [SHADER_LIGHT] =
+    {
+        .name = "light",
+        .pconst_size = sizeof(struct push_constants_light),
+        .use_descriptor_sets = true,
+        .depth_test = false,
+        .blending = true,
+        .vertex_binding_desc = (VkVertexInputBindingDescription)
+        {
+            .binding = 0,
+            .stride = sizeof(struct vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        },
+        .vertex_attr_desc =
+        {
+            // #1: vertex position
+            {
+                .binding = 0,
+                .location = 0,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
+                .offset = offsetof(struct vertex, pos),
+            },
+            // #2: texcoord
+            {
+                .binding = 0,
+                .location = 1,
+                .format = VK_FORMAT_R32G32_SFLOAT,
+                .offset = offsetof(struct vertex, texcoord),
+            },
+        },
+        .vertex_attr_count = 2,
+    },
+    // Subpass 2 shader
+    [SHADER_SCREENSUBPASS] =
+    {
+        .name = "screenpass",
+        .pconst_size = sizeof(struct push_constants_sp2),
+        .use_descriptor_sets = true,
+        .depth_test = false,
+        .blending = false,
+        .vertex_attr_count = 0,
+    },
 };
 
 struct shader_module_set
@@ -157,7 +204,9 @@ struct shader_module_set
     VkShaderModule frag;
 };
 
-static i32 shader_init(struct shader *, struct shader_module_set *);
+static i32 shader_init(enum shader_type,
+    struct shader *,
+    struct shader_module_set *);
 static VkShaderModule create_shader_module(const char *, bool *);
 
 i32
@@ -167,7 +216,7 @@ vulkan_shaders_init_all(void)
     u32 i;
 
     // Read shader modules first, so we can reuse them if needed
-    struct shader_module_set *modules = 
+    struct shader_module_set *modules =
         malloc(sizeof(struct shader_module_set) * SHADER_COUNT);
     u32 shader_module_count = 0;
     for (i = 0; i < SHADER_COUNT; ++i)
@@ -211,7 +260,7 @@ vulkan_shaders_init_all(void)
     exists:
 
         // Actually load the shader
-        if (shader_init(&g_shader_list[i], cur_mod) < 0)
+        if (shader_init(i, &g_shader_list[i], cur_mod) < 0)
             status = -1;
     }
 
@@ -231,11 +280,11 @@ vulkan_shaders_free_all(void)
     // Destroy pipelines
     for (u32 i = 0; i < SHADER_COUNT; ++i)
     {
-        vkDestroyPipeline(g_vulkan->d, 
-            g_shader_list[i].pipeline, 
+        vkDestroyPipeline(g_vulkan->d,
+            g_shader_list[i].pipeline,
             NULL);
-        vkDestroyPipelineLayout(g_vulkan->d, 
-            g_shader_list[i].pipeline_layout, 
+        vkDestroyPipelineLayout(g_vulkan->d,
+            g_shader_list[i].pipeline_layout,
             NULL);
     }
     return 0;
@@ -243,8 +292,9 @@ vulkan_shaders_free_all(void)
 
 static i32
 shader_init(
-    struct shader *s, 
-    struct shader_module_set *modules) 
+    enum shader_type id,
+    struct shader *s,
+    struct shader_module_set *modules)
 {
     /*
      * Create shader stages
@@ -271,14 +321,26 @@ shader_init(
     /*
      * Vertex input
      */
-    VkPipelineVertexInputStateCreateInfo vertex_input_info =
+    VkPipelineVertexInputStateCreateInfo vertex_input_info;
+    if (id == SHADER_SCREENSUBPASS)
     {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &s->vertex_binding_desc,
-        .vertexAttributeDescriptionCount = s->vertex_attr_count,
-        .pVertexAttributeDescriptions = s->vertex_attr_desc,
-    };
+        // Empty vertex input info for subpass 2 shader
+        memset(&vertex_input_info, 0,
+            sizeof(VkPipelineVertexInputStateCreateInfo));
+        vertex_input_info.sType =
+            VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    }
+    else
+    {
+        vertex_input_info = (VkPipelineVertexInputStateCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            .vertexBindingDescriptionCount = 1,
+            .pVertexBindingDescriptions = &s->vertex_binding_desc,
+            .vertexAttributeDescriptionCount = s->vertex_attr_count,
+            .pVertexAttributeDescriptions = s->vertex_attr_desc,
+        };
+    }
 
     /*
      * Input assembly
@@ -371,7 +433,7 @@ shader_init(
             VK_COLOR_COMPONENT_G_BIT |
             VK_COLOR_COMPONENT_B_BIT |
             VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable = VK_TRUE,
+        .blendEnable = s->blending ? VK_TRUE : VK_FALSE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
         .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .colorBlendOp = VK_BLEND_OP_ADD,
@@ -397,6 +459,23 @@ shader_init(
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
     };
 
+    VkDescriptorSetLayout *desc_set_layout = NULL;
+    u32 desc_set_layout_count = 0;
+    if (s->use_descriptor_sets)
+    {
+        if (id == SHADER_SCREENSUBPASS)
+        {
+            // Subpass 2 shader; use special descriptor set layout
+            desc_set_layout = &g_vulkan->desc_set_layout_sp2;
+        }
+        else
+        {
+            // Regular shader; use normal descriptor set layout
+            desc_set_layout = &g_vulkan->desc_set_layout;
+        }
+        ++desc_set_layout_count;
+    }
+
     /*
      * Pipeline layout
      */
@@ -405,10 +484,8 @@ shader_init(
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pPushConstantRanges = &push_consts,
         .pushConstantRangeCount = 1,
-        .setLayoutCount = !!s->use_descriptor_sets,
-        .pSetLayouts = s->use_descriptor_sets 
-            ? &g_vulkan->desc_set_layout 
-            : NULL,
+        .setLayoutCount = desc_set_layout_count,
+        .pSetLayouts = desc_set_layout,
     };
     if (vkCreatePipelineLayout(g_vulkan->d,
         &pipeline_layout_info, NULL, &s->pipeline_layout) != VK_SUCCESS)
@@ -437,8 +514,14 @@ shader_init(
         .pDynamicState = NULL,
 
         .layout = s->pipeline_layout,
-        .renderPass = g_vulkan->render_pass,
-        .subpass = 0,
+
+        // Lights are rendered in separate pass
+        .renderPass = (id == SHADER_LIGHT)
+            ? g_vulkan->light_render_pass
+            : g_vulkan->render_pass,
+
+        // Render in subpass 2 if we are on the special shader
+        .subpass = (id == SHADER_SCREENSUBPASS) ? 1 : 0,
     };
     if (vkCreateGraphicsPipelines(g_vulkan->d, VK_NULL_HANDLE, 1,
         &pipeline_info, NULL, &s->pipeline) != VK_SUCCESS)

@@ -17,6 +17,13 @@ enum shader_type
     SHADER_PARTICLE,
     SHADER_VERTEXLIT,
 
+    // Light rendering shader, used only in the light render pass
+    SHADER_LIGHT,
+
+    // Special shader only used in subpass 2 to read colour attachment and do
+    // basic post-processing
+    SHADER_SCREENSUBPASS,
+
     SHADER_COUNT
 };
 
@@ -27,6 +34,11 @@ static const u32 SHADER_RENDER_ORDER[SHADER_COUNT] =
     SHADER_VERTEXLIT,
     SHADER_DEFAULT_NO_ZBUFFER,
     SHADER_PARTICLE,
+
+    // Unordered (as the order only applies to Pass 2, Subpass 2, which these
+    //            shaders are not used in)
+    SHADER_LIGHT,
+    SHADER_SCREENSUBPASS,
 };
 
 /* Vertex attributes for default shader */
@@ -81,8 +93,23 @@ struct vertex_ptl
 // Push constants for particle shader
 struct push_constants_ptl
 {
-    // Only need MVP; any shading can be done on vertices directly
+    // Only need MVP; any shading can be done on vertices directly, and
+    // texcoords are stored in shader itself as we only render quads with this
     mat4s mvp;
+};
+
+// Push constants for light shader
+struct push_constants_light
+{
+    mat4s mvp;
+    vec4s colour;
+    int tex_index;
+};
+// Push constants for screenpass shader
+struct push_constants_sp2
+{
+    // Shading colour
+    vec4s shade_colour;
 };
 
 struct shader
@@ -97,7 +124,7 @@ struct shader
     size_t pconst_size;
 
     // Vertex buffer info
-    VkVertexInputBindingDescription vertex_binding_desc; 
+    VkVertexInputBindingDescription vertex_binding_desc;
     VkVertexInputAttributeDescription vertex_attr_desc[MAX_VERTEX_ATTR];
     u32 vertex_attr_count;
 
@@ -106,6 +133,9 @@ struct shader
 
     // Whether to read/write to Z-buffer
     bool depth_test;
+
+    // Whether to use blending
+    bool blending;
 };
 
 // Shader list

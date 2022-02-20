@@ -50,7 +50,7 @@ struct tagap_theme_info
     i32 darkness[THEME_STATE_COUNT];
 };
 
-static inline f32 
+static inline f32
 theme_get_darkness_value(i32 darkness)
 {
     darkness = clamp(darkness, 0, 3);
@@ -58,7 +58,7 @@ theme_get_darkness_value(i32 darkness)
     static const f32 DARKNESS_VALUES[4] =
     {
         1.0f,
-        0.65f,
+        0.50f,
         0.25f,
         0.00f,
     };

@@ -26,7 +26,7 @@ renderer_init(SDL_Window *winhandle)
     // Allocate object groups
     for (u32 i = 0; i < SHADER_COUNT; ++i)
     {
-        g_renderer.objgroups[i].objs = 
+        g_renderer.objgroups[i].objs =
             malloc(MAX_OBJECTS[i] * sizeof(struct renderable));
     }
 
@@ -81,7 +81,7 @@ renderer_get_renderable(enum shader_type shader)
 {
     if (g_renderer.objgroups[shader].obj_count + 1 > MAX_OBJECTS[shader])
     {
-        LOG_ERROR("[renderer] object capacity exceeded for shader '%d'!", 
+        LOG_ERROR("[renderer] object capacity exceeded for shader '%s'!",
             g_shader_list[shader].name);
         return NULL;
     }
@@ -323,7 +323,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         }
 
         // Create renderables
-        struct renderable *r = 
+        struct renderable *r =
             renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
         if (r)
         {
@@ -365,14 +365,14 @@ renderer_add_layer(struct tagap_layer *l, i32 z_offset)
 
     // Set texture
     r->tex = tex_index;
-    vec2s tex_size = 
+    vec2s tex_size =
     {
         (f32)g_vulkan->textures[tex_index].w,
         (f32)g_vulkan->textures[tex_index].h,
     };
     r->flags |= RENDERABLE_NO_CULL_BIT | RENDERABLE_SHADED_BIT;
 
-    f32 w = WIDTH_INTERNAL; 
+    f32 w = WIDTH_INTERNAL;
     f32 h = tex_size.y;
     struct vertex vertices[4] =
     {
@@ -439,8 +439,10 @@ renderer_add_trigger(struct tagap_trigger *t)
             h = g_vulkan->textures[tex_index].h;
 
         // Create the quad
-        struct renderable *r = renderer_get_renderable_quad_dim(w, h, false, 
-            DEPTH_TRIGGERS + l->depth);
+        struct renderable *r = renderer_get_renderable_quad_dim(
+            SHADER_DEFAULT_NO_ZBUFFER,
+            w, h,
+            false, DEPTH_TRIGGERS + l->depth);
         r->tex = tex_index;
         r->pos.x = t->corner_tl.x;
         r->pos.y = -t->corner_br.y;
@@ -456,9 +458,14 @@ renderer_add_trigger(struct tagap_trigger *t)
 }
 
 struct renderable *
-renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre, f32 depth)
+renderer_get_renderable_quad_dim(
+    enum shader_type type,
+    f32 w,
+    f32 h,
+    bool centre,
+    f32 depth)
 {
-    struct renderable *r = renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
+    struct renderable *r = renderer_get_renderable(type);
     if (!r) return NULL;
 
     struct vertex vertices[4];
@@ -529,9 +536,9 @@ renderer_get_renderable_quad_dim(f32 w, f32 h, bool centre, f32 depth)
 }
 
 struct renderable *
-renderer_get_renderable_quad(f32 depth)
+renderer_get_renderable_quad(enum shader_type type, f32 depth)
 {
-    return renderer_get_renderable_quad_dim(0.5f, 0.5f, true, depth);
+    return renderer_get_renderable_quad_dim(type, 0.5f, 0.5f, true, depth);
 }
 
 /*
@@ -564,9 +571,9 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
             },
             .colour = (vec4s)
             {
-                0.0f, 
-                0.0f, 
-                0.0f, 
+                0.0f,
+                0.0f,
+                0.0f,
                 1.0f,
             },
         };
@@ -585,7 +592,7 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
     {
         vertices[p->tex_offset_point - 1].colour.w = 0.0f;
     }
-    
+
     vb_new(&r->vb, vertices, vertices_size);
     free(vertices);
 
@@ -609,7 +616,7 @@ renderer_add_env(struct tagap_theme_info *theme)
     if (theme->env == ENVIRON_NONE) return NULL;
 
     // Unimplemented for no
-    if (theme->env == ENVIRON_UNDERWATER || 
+    if (theme->env == ENVIRON_UNDERWATER ||
         theme->env == ENVIRON_RAININT) return NULL;
 
     static const char *ENV_TEX_NAMES[] =
@@ -631,7 +638,7 @@ renderer_add_env(struct tagap_theme_info *theme)
     }
 
     // Create a fullscreen quad
-    struct renderable *r = 
+    struct renderable *r =
         renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
     if (!r) return NULL;
 
@@ -641,8 +648,8 @@ renderer_add_env(struct tagap_theme_info *theme)
         (f32)g_vulkan->textures[tex_index].w * 1.5f,
         (f32)g_vulkan->textures[tex_index].h * 1.5f,
     };
-    r->flags |= RENDERABLE_NO_CULL_BIT | 
-        RENDERABLE_SHADED_BIT | 
+    r->flags |= RENDERABLE_NO_CULL_BIT |
+        RENDERABLE_SHADED_BIT |
         RENDERABLE_EXTRA_SHADING_BIT;
     r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.25f};
 

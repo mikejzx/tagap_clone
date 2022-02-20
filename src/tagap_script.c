@@ -93,8 +93,8 @@ tagap_script_run(const char *fpath)
 
     // Read the script file line by line
     size_t len = 0, ltmp;
-    for (char *line = NULL; 
-        (len = getline(&line, &ltmp, fp)) != -1; 
+    for (char *line = NULL;
+        (len = getline(&line, &ltmp, fp)) != -1;
         ++ss.line_num)
     {
         // Strip newline
@@ -444,7 +444,7 @@ tagap_script_run_cmd_in_state(
     // Environment setting for theme
     case ATOM_ENVIRONMENT:
     {
-        struct tagap_theme_info *t = 
+        struct tagap_theme_info *t =
             &g_level->theme_infos[g_level->theme_info_count - 1];
         t->env = ss->tok[0].i;
     };
@@ -452,7 +452,7 @@ tagap_script_run_cmd_in_state(
     // Darkness setting for theme
     case ATOM_DARKNESS:
     {
-        struct tagap_theme_info *t = 
+        struct tagap_theme_info *t =
             &g_level->theme_infos[g_level->theme_info_count - 1];
         t->darkness[THEME_STATE_BASE] = ss->tok[0].i;
         t->darkness[THEME_STATE_SHIFT] = ss->tok[1].i;
@@ -689,7 +689,7 @@ tagap_script_run_cmd_in_state(
             {
                 (f32)ss->tok[2].i / 255.0f,
                 (f32)ss->tok[3].i / 255.0f,
-                (f32)ss->tok[3].i / 255.0f,
+                (f32)ss->tok[4].i / 255.0f,
             },
         };
     } break;

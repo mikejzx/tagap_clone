@@ -189,6 +189,8 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     vkGetSwapchainImagesKHR(g_vulkan->d,
         swapchain->handle, &schain_image_count, swapchain->images);
 
+    LOG_DBUG("[vulkan] got %d swapchain images", swapchain->image_count);
+
     /*
      * Create image views
      */
@@ -228,12 +230,95 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
         }
     }
 
+    /*
+     * Create colour attachments
+     */
+    swapchain->attachments = malloc(swapchain->image_count *
+        sizeof(struct vulkan_framebuffer_attachment));
+    for (u32 i = 0; i < swapchain->image_count; ++i)
+    {
+        // Create image
+        struct vulkan_framebuffer_attachment *a =
+            &swapchain->attachments[i].colour;
+        a->format = swapchain->format;
+        VkImageCreateInfo image_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .extent =
+            {
+                .width = swapchain->extent.width,
+                .height = swapchain->extent.height,
+                .depth = 1,
+            },
+            .format = a->format,
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+        };
+        const VmaAllocationCreateInfo image_alloc_info =
+        {
+            .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+            .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        };
+        if (vmaCreateImage(g_vulkan->vma,
+            &image_info,
+            &image_alloc_info,
+            &a->image,
+            &a->alloc, NULL) != VK_SUCCESS)
+        {
+            LOG_ERROR("[vulkan] failed to create image attachment");
+            return -1;
+        }
+
+        // Create image views
+        VkImageViewCreateInfo view_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = a->image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = a->format,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+        if (vkCreateImageView(g_vulkan->d,
+            &view_info,
+            NULL,
+            &a->view) != VK_SUCCESS)
+        {
+            LOG_ERROR("[vulkan] failed to create input attachment image view");
+            return -1;
+        }
+    }
+
     return 0;
 }
 
 void
 vulkan_swapchain_deinit(struct vulkan_swapchain *swapchain)
 {
+    if (swapchain->attachments)
+    {
+        for (i32 i = 0; i < swapchain->image_count; ++i)
+        {
+            vkDestroyImageView(g_vulkan->d,
+                swapchain->attachments[i].colour.view, NULL);
+            vmaDestroyImage(g_vulkan->vma,
+                swapchain->attachments[i].colour.image,
+                swapchain->attachments[i].colour.alloc);
+        }
+        free(swapchain->attachments);
+    }
     if (swapchain->imageviews)
     {
         for (i32 i = 0; i < swapchain->image_count; ++i)
@@ -268,17 +353,20 @@ vulkan_swapchain_create_framebuffers(struct vulkan_swapchain *swapchain)
 
     for (i32 i = 0; i < swapchain->image_count; ++i)
     {
-        VkImageView attachments[] = 
+        VkImageView views[] =
         {
-            swapchain->imageviews[i], g_vulkan->zbuf_view,
+            swapchain->imageviews[i], // Swapchain colour image
+            g_vulkan->zbuf_view,      // Swapchain depth buffer image
+            // Input attachment colour image
+            swapchain->attachments[i].colour.view,
         };
 
         VkFramebufferCreateInfo fb_info =
         {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = g_vulkan->render_pass,
-            .attachmentCount = sizeof(attachments) / sizeof(VkImageView),
-            .pAttachments = attachments,
+            .attachmentCount = sizeof(views) / sizeof(VkImageView),
+            .pAttachments = views,
             .width  = swapchain->extent.width,
             .height = swapchain->extent.height,
             .layers = 1,

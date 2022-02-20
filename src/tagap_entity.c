@@ -11,7 +11,7 @@
 #define KICK_TIMER_MAX (0.1f)
 #define KICK_AMOUNT (16.0f)
 
-static void entity_spawn_missile(struct tagap_entity *, 
+static void entity_spawn_missile(struct tagap_entity *,
     struct tagap_entity_info *);
 static void create_gunent(struct tagap_entity *, bool);
 
@@ -43,6 +43,7 @@ entity_spawn(struct tagap_entity *e)
 
         // Create the sprite renderable
         e->sprites[s] = renderer_get_renderable_quad(
+            SHADER_DEFAULT_NO_ZBUFFER,
             DEPTH_ENTITIES + g_map->current_entity_depth / 10.0f);
         struct renderable *r = e->sprites[s];
 
@@ -96,7 +97,7 @@ entity_spawn(struct tagap_entity *e)
     // Create non-RENDERFIRST gun entities
     create_gunent(e, false);
 
-    if (e->weapon_slot >= 0) 
+    if (e->weapon_slot >= 0)
     {
         entity_change_weapon_slot(e, e->weapon_slot);
 
@@ -105,6 +106,48 @@ entity_spawn(struct tagap_entity *e)
         {
             e->weapons[i].reload_timer = -1.0f;
         }
+    }
+
+    // Create entity light renderable
+    if (e->info->light.radius > 0.0f &&
+        e->info->light.intensity > 0.0f)
+    {
+        //LOG_DBUG("[tagap_entity] %s has light, r:%.2f i:%.2f",
+        //    e->info->name,
+        //    e->info->light.radius,
+        //    e->info->light.intensity);
+
+        // Load default light texture
+        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_light.tga");
+        if (tex <= 0)
+        {
+            LOG_ERROR("[tagap_entity] failed to add light (no texture)");
+            return;
+        }
+
+        // Create the light quad
+        e->r_light = renderer_get_renderable_quad_dim(
+            SHADER_LIGHT,
+            g_vulkan->textures[tex].w * e->info->light.radius,
+            g_vulkan->textures[tex].h * e->info->light.radius,
+            true,
+            0.0f);
+        if (!e->r_light)
+        {
+            LOG_ERROR("[tagap_entity] failed to add light");
+            return;
+        }
+        e->r_light->pos = e->position;
+        e->r_light->pos.y *= -1.0f;
+        //e->r_light->offset = e->info->offsets[OFFSET_MODEL_OFFSET];
+        e->r_light->tex = tex;
+        e->r_light->light_colour = (vec4s)
+        {
+            e->info->light.colour.x * e->info->light.intensity,
+            e->info->light.colour.y * e->info->light.intensity,
+            e->info->light.colour.z * e->info->light.intensity,
+            1.0f,
+        };
     }
 
     e->is_spawned = true;
@@ -138,7 +181,7 @@ entity_update(struct tagap_entity *e)
         }
         if (e->weapons[e->weapon_slot].reload_timer < 0.0f &&
             e->weapons[e->weapon_slot].ammo > 0 &&
-            e->inputs.fire && 
+            e->inputs.fire &&
             e->attack_timer > attack_delay)
         {
             entity_spawn_missile(e, missile_info);
@@ -147,7 +190,7 @@ entity_update(struct tagap_entity *e)
 
             // Decrement ammo
             --e->weapons[e->weapon_slot].ammo;
-            
+
             // Begin reload
             if (e->weapons[e->weapon_slot].ammo <= 0 &&
                 g_level->weapons[e->weapon_slot].reload_time > 0.0f)
@@ -167,7 +210,7 @@ entity_update(struct tagap_entity *e)
             {
                 // Reload finished
                 e->weapons[e->weapon_slot].reload_timer = -1.0f;
-                e->weapons[e->weapon_slot].ammo = 
+                e->weapons[e->weapon_slot].ammo =
                     g_level->weapons[e->weapon_slot].magazine_size;
             }
         }
@@ -296,8 +339,8 @@ entity_update(struct tagap_entity *e)
             if (!e->info->has_weapon) break;
 
             // Hide second weapon sprite if entity does not have akimbo
-            SET_BIT(spr_r->flags, 
-                RENDERABLE_HIDDEN_BIT, 
+            SET_BIT(spr_r->flags,
+                RENDERABLE_HIDDEN_BIT,
                 !(e->weapon_slot == 0 && e->weapons[0].has_akimbo));
 
             if (!(spr_r->flags & RENDERABLE_HIDDEN_BIT)) goto weapon_anim;
@@ -310,8 +353,8 @@ entity_update(struct tagap_entity *e)
             f32 reload_angle = 0.0f;
             if (e->weapons[e->weapon_slot].reload_timer >= 0.0f)
             {
-                reload_angle = 
-                    (e->weapons[e->weapon_slot].reload_timer / 
+                reload_angle =
+                    (e->weapons[e->weapon_slot].reload_timer /
                     g_level->weapons[e->weapon_slot].reload_time) * -360.0f;
             }
 
@@ -338,7 +381,7 @@ entity_update(struct tagap_entity *e)
                 if (tex_slot < spr->info->frame_count)
                 {
                     spr_r->tex = spr->info->frames[tex_slot].tex;
-                    if (spr->anim != ANIM_WEAPON2) 
+                    if (spr->anim != ANIM_WEAPON2)
                     {
                         // Remove hidden flag from weapon1 texture
                         spr_r->flags &= ~RENDERABLE_HIDDEN_BIT;
@@ -395,6 +438,29 @@ entity_update(struct tagap_entity *e)
         spr_r->rot = spr_rot;
     }
 
+    if (e->r_light)
+    {
+        // Update light position
+        e->r_light->pos = glms_vec2_add(glms_vec2_add(e->position, (vec2s)
+        {
+            e->info->stats[STAT_FX_OFFSXFACE] *
+                -((f32)e->flipped * 2.0f - 1.0f),
+            0.0f,
+        }), e->info->offsets[OFFSET_FX_OFFSET]);
+        e->r_light->pos.y *= -1.0f;
+
+        // Update entity light dim
+        e->timer_dim += (DT + e->info->stats[STAT_FX_DIM]) * 4.0f;
+        f32 dim = (sinf(e->timer_dim) + 1.0f) / 4.0f + 0.5f;
+        e->r_light->light_colour = (vec4s)
+        {
+            e->info->light.colour.x * e->info->light.intensity * dim,
+            e->info->light.colour.y * e->info->light.intensity * dim,
+            e->info->light.colour.z * e->info->light.intensity * dim,
+            1.0f,
+        };
+    }
+
     // Apply particle effects
     entity_apply_particle_fx(e);
 }
@@ -438,6 +504,7 @@ entity_reset(
     e->blink_timer = 0;
     e->timer_tempmissile = 0.0f;
     e->attack_timer = 0.0f;
+    e->timer_dim = 0.0f;
 }
 
 void
@@ -462,7 +529,7 @@ entity_spawn_missile(
 /*
  * Sets an entity activity and hidden state
  */
-void 
+void
 entity_set_inactive_hidden(struct tagap_entity *e, bool h)
 {
     e->active = !h;
@@ -470,12 +537,17 @@ entity_set_inactive_hidden(struct tagap_entity *e, bool h)
     {
         SET_BIT(e->sprites[i]->flags, RENDERABLE_HIDDEN_BIT, h);
     }
+    // Toggle light
+    if (e->r_light)
+    {
+        SET_BIT(e->r_light->flags, RENDERABLE_HIDDEN_BIT, h);
+    }
 }
 
 /*
  * Creates gunentities
  */
-static void 
+static void
 create_gunent(struct tagap_entity *e, bool render_first)
 {
     // No weapon
@@ -495,7 +567,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
         }
 
         // Check if it's in the render order we want
-        if (missile_info->gun_entity->stats[STAT_FX_RENDERFIRST] != 
+        if (missile_info->gun_entity->stats[STAT_FX_RENDERFIRST] !=
             (i32)render_first)
         {
             continue;
@@ -528,9 +600,9 @@ create_gunent(struct tagap_entity *e, bool render_first)
             // A bit dodgey?
             e->weapons[w].gunent->sprites[s]->offset = (vec2s)
             {
-                e->weapons[w].gunent->sprites[s]->offset.x + 
+                e->weapons[w].gunent->sprites[s]->offset.x +
                     missile_info->gun_entity->offsets[OFFSET_MODEL_OFFSET].x,
-                e->weapons[w].gunent->sprites[s]->offset.y + 
+                e->weapons[w].gunent->sprites[s]->offset.y +
                     missile_info->gun_entity->offsets[OFFSET_MODEL_OFFSET].y,
             };
         }

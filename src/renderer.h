@@ -27,10 +27,13 @@ struct tagap_theme_info;
 
 static const u32 MAX_OBJECTS[SHADER_COUNT] =
 {
-    [SHADER_DEFAULT] = 1024, 
-    [SHADER_DEFAULT_NO_ZBUFFER] = 1024, 
+    [SHADER_DEFAULT] = 1024,
+    [SHADER_DEFAULT_NO_ZBUFFER] = 1024,
     [SHADER_VERTEXLIT] = 128,
     [SHADER_PARTICLE] = 1,
+    [SHADER_LIGHT] = 512,
+
+    [SHADER_SCREENSUBPASS] = 0,
 };
 
 enum renderable_flag
@@ -56,7 +59,10 @@ struct renderable
     vec2s tex_offset;
 
     // Additional shading multiplier
-    vec4s extra_shading;
+    union
+    {
+        vec4s extra_shading, light_colour;
+    };
 
     // For culling objects outside of the viewport
     struct
@@ -82,8 +88,9 @@ void renderer_render(vec3s *);
 void renderer_deinit(void);
 
 struct renderable *renderer_get_renderable(enum shader_type);
-struct renderable *renderer_get_renderable_quad(f32);
-struct renderable *renderer_get_renderable_quad_dim(f32, f32, bool, f32);
+struct renderable *renderer_get_renderable_quad(enum shader_type, f32);
+struct renderable *renderer_get_renderable_quad_dim(enum shader_type,
+    f32, f32, bool, f32);
 void renderer_add_polygon(struct tagap_polygon *);
 void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);

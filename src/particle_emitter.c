@@ -2,6 +2,7 @@
 #include "tagap.h"
 #include "tagap_entity.h"
 #include "particle_emitter.h"
+#include "renderer.h"
 
 static struct particle_emitter emitters[PARTICLE_FX_COUNT] =
 {
@@ -11,14 +12,14 @@ static struct particle_emitter emitters[PARTICLE_FX_COUNT] =
         .props =
         {
             .type = PARTICLE_SMOKE,
-            .size.begin = 16.0f,
-            .size.end = 64.0f,
+            .size.begin = 8.0f,
+            .size.end = 16.0f,
             .opacity.begin = 1.0f,
             .opacity.end = 0.0f,
-            .lifetime = 1.0f,
+            .lifetime = 0.15f,
         },
         .rate = 0.1f,
-        .speed_mul = 64.0f,
+        .speed_mul = 48.0f,
     },
 };
 
@@ -45,7 +46,7 @@ entity_apply_particle_fx(struct tagap_entity *e)
     }
 }
 
-static void 
+static void
 particle_fx_emit(struct tagap_entity *e, struct particle_emitter *emitter)
 {
     emitter->timer += DT;
@@ -80,11 +81,23 @@ particle_fx_emit(struct tagap_entity *e, struct particle_emitter *emitter)
     } break;
     default: break;
     }
-    emitter->props.velo = glms_vec2_scale(emitter->props.velo, 
+    emitter->props.velo = glms_vec2_scale(emitter->props.velo,
         emitter->speed_mul);
 
     // Set particle emission position
-    emitter->props.pos = e->position;
+    mat3s mat = GLMS_MAT3_IDENTITY_INIT;
+    mat = glms_rotate2d(mat, glm_rad(e->aim_angle));
+    vec3s offset = (vec3s)
+    {
+        e->info->offsets[OFFSET_FX_OFFSET].x,
+        e->info->offsets[OFFSET_FX_OFFSET].y,
+    };
+    offset = glms_mat3_mulv(mat, offset);
+    vec2s offset2 = (vec2s){ offset.x, offset.y };
+
+    emitter->props.pos = glms_vec2_add(e->position, offset2);
+    emitter->props.pos.y += e->info->offsets[OFFSET_MODEL_OFFSET].y;
+    emitter->props.pos.x += e->info->offsets[OFFSET_MODEL_OFFSET].x;
 
     particle_emit(g_parts, &emitter->props);
 }

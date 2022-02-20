@@ -27,6 +27,8 @@ enum tagap_entity_stat_id
     STAT_TEMPMISSILE,
 
     // FX stats
+    STAT_FX_DIM,
+    STAT_FX_OFFSXFACE,
     STAT_FX_RENDERFIRST,
     STAT_FX_SMOKE,
 
@@ -44,6 +46,8 @@ static const char *STAT_NAMES[] =
     [STAT_CHARGE]         = "CHARGE",
     [STAT_DAMAGE]         = "DAMAGE",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
+    [STAT_FX_DIM]         = "FX_DIM",
+    [STAT_FX_OFFSXFACE]   = "FX_OFFSXFACE",
     [STAT_FX_RENDERFIRST] = "FX_RENDERFIRST",
     [STAT_FX_SMOKE]       = "FX_SMOKE",
     [STAT_S_AKIMBO]       = "S_AKIMBO",
@@ -246,6 +250,10 @@ struct tagap_entity
     // Effects
     //struct tagap_entity_effect fx[ENTITY_MAX_EFFECTS];
     //u32 fx_count;
+
+    // Light renderer
+    struct renderable *r_light;
+    f32 timer_dim;
 };
 
 void entity_spawn(struct tagap_entity *);

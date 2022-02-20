@@ -33,11 +33,16 @@ struct shader;
 #endif
 
 #define MAX_TEXTURES 128
+// We reserve two textures at the moment
+//  0: default 1x1 white texture
+#define RESERVED_TEXTURE_COUNT 1
+#define TEXINDEX_DEFAULT 0
 
 enum vulkan_queue_id
 {
     VKQ_GRAPHICS,
     VKQ_PRESENT,
+
     VKQ_COUNT,
 };
 
@@ -66,6 +71,10 @@ struct vulkan_renderer
     VkCommandBuffer *cmd_buffers;
     u32 cmd_buffer_count;
 
+    // Subpass 2 descriptors
+    VkDescriptorSetLayout desc_set_layout_sp2;
+    VkDescriptorSet *desc_sets_sp2;
+
     // Textures
     VkSampler sampler;
     struct vulkan_texture
@@ -75,6 +84,7 @@ struct vulkan_renderer
         VkImageView view;
         char name[256];
         u32 w, h;
+        VkFormat format;
     } textures[MAX_TEXTURES];
     i32 tex_used;
     VkDescriptorImageInfo *image_desc_infos;
@@ -87,6 +97,11 @@ struct vulkan_renderer
     VmaAllocation zbuf_alloc;
 
     struct vulkan_swapchain *swapchain;
+
+    // Lighting
+    struct vulkan_texture *light_tex;
+    VkFramebuffer *light_framebufs;
+    VkRenderPass light_render_pass;
 };
 
 extern struct vulkan_renderer *g_vulkan;

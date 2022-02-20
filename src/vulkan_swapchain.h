@@ -17,6 +17,17 @@ struct vulkan_swapchain
     u32 image_count;
     VkImageView *imageviews;
     VkFramebuffer *framebuffers;
+
+    struct vulkan_framebuffer_attachment_group
+    {
+        struct vulkan_framebuffer_attachment
+        {
+            VkImage image;
+            VkImageView view;
+            VmaAllocation alloc;
+            VkFormat format;
+        } colour;
+    } *attachments;
 };
 
 i32 vulkan_swapchain_create(struct vulkan_swapchain *);
