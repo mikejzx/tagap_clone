@@ -136,6 +136,7 @@ struct shader
 
     // Whether to use blending
     bool blending;
+    bool blend_additive;
 };
 
 // Shader list

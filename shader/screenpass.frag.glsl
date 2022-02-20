@@ -15,7 +15,7 @@ void main()
 {
     vec3 light = texture(u_Lightmap, v_Texcoord).rgb;
     o_FragColour = vec4(
-        subpassLoad(i_Colour).rgb * (v_Shading.rgb + light * 10.0),
-        1.0f) + vec4(light / 2.5, 0.0);
+        subpassLoad(i_Colour).rgb * (v_Shading.rgb + light * 5.0),
+        1.0f) + vec4(light / 5.0, 0.0);
     //o_FragColour.rgb = light;
 }

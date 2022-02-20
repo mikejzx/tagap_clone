@@ -119,6 +119,7 @@ g_shader_list[SHADER_COUNT] =
         .use_descriptor_sets = true,
         .depth_test = false,
         .blending = true,
+        .blend_additive = true,
 
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
@@ -160,6 +161,8 @@ g_shader_list[SHADER_COUNT] =
         .use_descriptor_sets = true,
         .depth_test = false,
         .blending = true,
+        .blend_additive = true,
+
         .vertex_binding_desc = (VkVertexInputBindingDescription)
         {
             .binding = 0,
@@ -435,7 +438,9 @@ shader_init(
             VK_COLOR_COMPONENT_A_BIT,
         .blendEnable = s->blending ? VK_TRUE : VK_FALSE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .dstColorBlendFactor = s->blend_additive
+            ? VK_BLEND_FACTOR_ONE
+            : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .colorBlendOp = VK_BLEND_OP_ADD,
         .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
         .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,

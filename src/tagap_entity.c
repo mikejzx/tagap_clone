@@ -112,11 +112,6 @@ entity_spawn(struct tagap_entity *e)
     if (e->info->light.radius > 0.0f &&
         e->info->light.intensity > 0.0f)
     {
-        //LOG_DBUG("[tagap_entity] %s has light, r:%.2f i:%.2f",
-        //    e->info->name,
-        //    e->info->light.radius,
-        //    e->info->light.intensity);
-
         // Load default light texture
         i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_light.tga");
         if (tex <= 0)
@@ -126,20 +121,19 @@ entity_spawn(struct tagap_entity *e)
         }
 
         // Create the light quad
-        e->r_light = renderer_get_renderable_quad_dim(
+        e->r_light = renderer_get_renderable_quad_dim_explicit(
             SHADER_LIGHT,
-            g_vulkan->textures[tex].w * e->info->light.radius,
-            g_vulkan->textures[tex].h * e->info->light.radius,
+            g_vulkan->textures[tex].w * e->info->light.radius * 2.0f,
+            g_vulkan->textures[tex].h * e->info->light.radius * 2.0f,
             true,
-            0.0f);
+            true,
+            0.0f,
+            true);
         if (!e->r_light)
         {
             LOG_ERROR("[tagap_entity] failed to add light");
             return;
         }
-        e->r_light->pos = e->position;
-        e->r_light->pos.y *= -1.0f;
-        //e->r_light->offset = e->info->offsets[OFFSET_MODEL_OFFSET];
         e->r_light->tex = tex;
         e->r_light->light_colour = (vec4s)
         {
@@ -148,6 +142,94 @@ entity_spawn(struct tagap_entity *e)
             e->info->light.colour.z * e->info->light.intensity,
             1.0f,
         };
+    }
+
+    // Create entity flashlight renderable
+    if (e->info->flashlight.halo_radius > 0.0f &&
+        e->info->flashlight.beam_length > 0.0f)
+    {
+        // Load flashlight texture
+        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_flashlight.tga");
+        if (tex <= 0)
+        {
+            LOG_ERROR("[tagap_entity] failed to add flashlight (no texture)");
+            return;
+        }
+
+        // Create the flashlight quad
+        e->r_flashlight = renderer_get_renderable_quad_dim_explicit(
+            SHADER_LIGHT,
+            g_vulkan->textures[tex].w * e->info->flashlight.beam_length * 2.0f,
+            g_vulkan->textures[tex].h * e->info->flashlight.halo_radius * 0.5f,
+            false,
+            true,
+            0.0f,
+            true);
+        if (!e->r_flashlight)
+        {
+            LOG_ERROR("[tagap_entity] failed to add flashlight");
+            return;
+        }
+        e->r_flashlight->tex = tex;
+        e->r_flashlight->light_colour = (vec4s)
+        {
+            e->info->flashlight.colour.x * 0.1f,
+            e->info->flashlight.colour.y * 0.1f,
+            e->info->flashlight.colour.z * 0.1f,
+            1.0f,
+        };
+
+        if (e->info->think.mode == THINK_AI_USER)
+        {
+            // Don't cull player flashlight
+            e->r_flashlight->flags |= RENDERABLE_NO_CULL_BIT;
+        }
+        else
+        {
+            // Simple fix for rotated flashlights being culled; not sure if the
+            // rotated points are exactly on point, but it seems to work fine
+            // as-is
+            vec2s bounds_min_new, bounds_max_new;
+            switch ((i32)e->aim_angle)
+            {
+            case -270:
+            case 90:
+                bounds_min_new.x = e->r_flashlight->bounds.min.x;
+                bounds_min_new.y = e->r_flashlight->bounds.min.y;
+                bounds_max_new.x = e->r_flashlight->bounds.min.y;
+                bounds_max_new.y = e->r_flashlight->bounds.max.x;
+                break;
+            case -180:
+            case 180:
+                bounds_min_new.x = -e->r_flashlight->bounds.max.x;
+                bounds_min_new.y = e->r_flashlight->bounds.min.y;
+                bounds_max_new.x = e->r_flashlight->bounds.min.x;
+                bounds_max_new.y = e->r_flashlight->bounds.max.y;
+                break;
+            case -90:
+            case 270:
+                bounds_min_new.x = e->r_flashlight->bounds.min.y;
+                bounds_min_new.y = -e->r_flashlight->bounds.max.x;
+                bounds_max_new.x = e->r_flashlight->bounds.max.y;
+                bounds_max_new.y = e->r_flashlight->bounds.max.y;
+                break;
+            default:
+                LOG_WARN("[tagap_entity] '%s' flashlight has unusual angle "
+                    "%.0f deg; disabling culling", e->aim_angle);
+                e->r_flashlight->flags |= RENDERABLE_NO_CULL_BIT;
+            case 360:
+            case 0:
+                break;
+            }
+            e->r_flashlight->bounds.min = bounds_min_new;
+            e->r_flashlight->bounds.max = bounds_max_new;
+            LOG_DBUG("[tagap_entity] rotated flashlight bounds: "
+                "%.2f %.2f  %.2f %.2f",
+                e->r_flashlight->bounds.min.x,
+                e->r_flashlight->bounds.min.y,
+                e->r_flashlight->bounds.max.x,
+                e->r_flashlight->bounds.max.y);
+        }
     }
 
     e->is_spawned = true;
@@ -261,6 +343,8 @@ entity_update(struct tagap_entity *e)
         e->weapon_kick_timer  = e->owner->weapon_kick_timer;
     }
 
+    f32 flip_mul = (f32)e->flipped * -2.0f + 1.0f;
+
     // TODO: only enable bobbing if entity during load detects that sprites
     // need bobbing
     f32 bob_sin = 0.0f;
@@ -320,7 +404,7 @@ entity_update(struct tagap_entity *e)
 
             // Add the linedef's tangent angle
             f32 tangent = glm_deg(atan(e->collision.floor_gradient));
-            if (e->flipped) tangent *= -1.0f;
+            tangent *= flip_mul;
             sprite_rot_offset += tangent;
         }
 
@@ -363,8 +447,7 @@ entity_update(struct tagap_entity *e)
 
             // Apply weapon kick animation
             f32 kick_value = KICK_AMOUNT * e->weapon_kick_timer;
-            spr_pos.x += kick_value * cosf(glm_rad(e->aim_angle)) *
-                ((f32)e->flipped * 2.0f - 1.0f);
+            spr_pos.x += kick_value * cosf(glm_rad(e->aim_angle)) * -flip_mul;
             spr_pos.y += kick_value * -sinf(glm_rad(e->aim_angle));
 
             // Texture adjustments (only apply to the weapon owner)
@@ -443,8 +526,7 @@ entity_update(struct tagap_entity *e)
         // Update light position
         e->r_light->pos = glms_vec2_add(glms_vec2_add(e->position, (vec2s)
         {
-            e->info->stats[STAT_FX_OFFSXFACE] *
-                -((f32)e->flipped * 2.0f - 1.0f),
+            e->info->stats[STAT_FX_OFFSXFACE] * flip_mul,
             0.0f,
         }), e->info->offsets[OFFSET_FX_OFFSET]);
         e->r_light->pos.y *= -1.0f;
@@ -459,6 +541,17 @@ entity_update(struct tagap_entity *e)
             e->info->light.colour.z * e->info->light.intensity * dim,
             1.0f,
         };
+    }
+
+    if (e->r_flashlight)
+    {
+        // Update flashlight position and rotation
+        vec2s origin = e->info->flashlight.origin;
+        //origin.y *= -1.0f;
+        e->r_flashlight->pos = glms_vec2_add(e->position, origin);
+        e->r_flashlight->pos.y *= -1.0f;
+        e->r_flashlight->rot = e->aim_angle;
+        SET_BIT(e->r_flashlight->flags, RENDERABLE_FLIPPED_BIT, e->flipped);
     }
 
     // Apply particle effects
@@ -537,10 +630,15 @@ entity_set_inactive_hidden(struct tagap_entity *e, bool h)
     {
         SET_BIT(e->sprites[i]->flags, RENDERABLE_HIDDEN_BIT, h);
     }
-    // Toggle light
+
+    // Toggle lights
     if (e->r_light)
     {
         SET_BIT(e->r_light->flags, RENDERABLE_HIDDEN_BIT, h);
+    }
+    if (e->r_flashlight)
+    {
+        SET_BIT(e->r_flashlight->flags, RENDERABLE_HIDDEN_BIT, h);
     }
 }
 

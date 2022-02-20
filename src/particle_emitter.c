@@ -84,12 +84,14 @@ particle_fx_emit(struct tagap_entity *e, struct particle_emitter *emitter)
     emitter->props.velo = glms_vec2_scale(emitter->props.velo,
         emitter->speed_mul);
 
+    f32 xflip = (f32)e->flipped * -2.0f + 1.0f;
+
     // Set particle emission position
     mat3s mat = GLMS_MAT3_IDENTITY_INIT;
-    mat = glms_rotate2d(mat, glm_rad(e->aim_angle));
+    mat = glms_rotate2d(mat, glm_rad(e->aim_angle) * xflip);
     vec3s offset = (vec3s)
     {
-        e->info->offsets[OFFSET_FX_OFFSET].x,
+        e->info->offsets[OFFSET_FX_OFFSET].x * xflip,
         e->info->offsets[OFFSET_FX_OFFSET].y,
     };
     offset = glms_mat3_mulv(mat, offset);
@@ -97,7 +99,7 @@ particle_fx_emit(struct tagap_entity *e, struct particle_emitter *emitter)
 
     emitter->props.pos = glms_vec2_add(e->position, offset2);
     emitter->props.pos.y += e->info->offsets[OFFSET_MODEL_OFFSET].y;
-    emitter->props.pos.x += e->info->offsets[OFFSET_MODEL_OFFSET].x;
+    emitter->props.pos.x += e->info->offsets[OFFSET_MODEL_OFFSET].x * xflip;
 
     particle_emit(g_parts, &emitter->props);
 }

@@ -57,6 +57,7 @@ enum tagap_script_atom_id
     ATOM_STAT,
     ATOM_GUNENTITY,
     ATOM_LIGHT,
+    ATOM_FLASHLIGHT,
     ATOM_WEAPON,
     ATOM_LAYER,
     ATOM_TRIGGER,
@@ -435,6 +436,31 @@ TAGAP_SCRIPT_COMMANDS[] =
             // #4: light colour (G)
             { .type = TSCRIPT_TOKEN_INT },
             // #5: light colour (B)
+            { .type = TSCRIPT_TOKEN_INT },
+        },
+        .requires_mode = true,
+        .required_mode = TAGAP_PARSE_ENTITY,
+    },
+    // Adds flashllight to entity
+    [ATOM_FLASHLIGHT] =
+    {
+        .name = "FLASHLIGHT",
+        .token_count = 7,
+        .tokens =
+        {
+            // #1: flashlight origin X-axis offset
+            { .type = TSCRIPT_TOKEN_INT },
+            // #2: flashlight origin Y-axis offset
+            { .type = TSCRIPT_TOKEN_INT },
+            // #3: light halo radius (%)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #4: light beam length (%)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #5: flashlight colour (R)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #6: flashlight colour (G)
+            { .type = TSCRIPT_TOKEN_INT },
+            // #7: flashlight colour (B)
             { .type = TSCRIPT_TOKEN_INT },
         },
         .requires_mode = true,

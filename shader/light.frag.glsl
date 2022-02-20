@@ -19,7 +19,7 @@ void main()
     tex.a = tex.r;
     vec4 colour = tex * v_Colour;
 
-    if (colour.a < 0.05) discard;
+    //if (colour.a < 0.01) discard;
 
     o_FragColour = colour;
 }

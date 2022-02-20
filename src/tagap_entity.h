@@ -132,6 +132,15 @@ struct tagap_entity_info
         vec3s colour;
     } light;
 
+    // Flashlight attached to entity
+    struct tagap_entity_flashlight
+    {
+        vec2s origin;
+        f32 halo_radius;
+        f32 beam_length;
+        vec3s colour;
+    } flashlight;
+
     // NOTE: make sure to add any new members to entity_info_clone!
 };
 
@@ -159,6 +168,8 @@ entity_info_clone(
     a->gun_entity = b->gun_entity;
     a->has_weapon = b->has_weapon;
     memcpy(&a->light, &b->light, sizeof(struct tagap_entity_light));
+    memcpy(&a->flashlight, &b->flashlight, 
+        sizeof(struct tagap_entity_flashlight));
 }
 
 struct tagap_entity
@@ -254,6 +265,9 @@ struct tagap_entity
     // Light renderer
     struct renderable *r_light;
     f32 timer_dim;
+
+    // Flashlight renderer
+    struct renderable *r_flashlight;
 };
 
 void entity_spawn(struct tagap_entity *);

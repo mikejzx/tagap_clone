@@ -91,6 +91,8 @@ struct renderable *renderer_get_renderable(enum shader_type);
 struct renderable *renderer_get_renderable_quad(enum shader_type, f32);
 struct renderable *renderer_get_renderable_quad_dim(enum shader_type,
     f32, f32, bool, f32);
+struct renderable *renderer_get_renderable_quad_dim_explicit(
+    enum shader_type, f32, f32, bool, bool, f32, bool);
 void renderer_add_polygon(struct tagap_polygon *);
 void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);

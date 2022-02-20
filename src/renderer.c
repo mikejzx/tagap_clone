@@ -458,70 +458,82 @@ renderer_add_trigger(struct tagap_trigger *t)
 }
 
 struct renderable *
-renderer_get_renderable_quad_dim(
+renderer_get_renderable_quad_dim_explicit(
     enum shader_type type,
     f32 w,
     f32 h,
-    bool centre,
-    f32 depth)
+    bool centre_x,
+    bool centre_y,
+    f32 depth,
+    bool make_bounds)
 {
     struct renderable *r = renderer_get_renderable(type);
     if (!r) return NULL;
 
     struct vertex vertices[4];
-    if (centre)
+
+    // Top left
+    vertices[0] = (struct vertex)
     {
-        // Top left
-        vertices[0] = (struct vertex)
-        {
-            .pos      = (vec3s) { -w, h, depth },
-            .texcoord = (vec2s) { 0.0f, 0.0f, },
-        };
-        // Top right
-        vertices[1] = (struct vertex)
-        {
-            .pos      = (vec3s) { w, h, depth },
-            .texcoord = (vec2s) { 1.0f, 0.0f, },
-        };
-        // Bottom right
-        vertices[2] = (struct vertex)
-        {
-            .pos      = (vec3s) { w, -h, depth },
-            .texcoord = (vec2s) { 1.0f, 1.0f, },
-        };
-        // Bottom left
-        vertices[3] = (struct vertex)
-        {
-            .pos      = (vec3s) { -w, -h, depth },
-            .texcoord = (vec2s) { 0.0f, 1.0f, },
-        };
+        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .texcoord = (vec2s) { 0.0f, 0.0f, },
+    };
+    // Top right
+    vertices[1] = (struct vertex)
+    {
+        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .texcoord = (vec2s) { 1.0f, 0.0f, },
+    };
+    // Bottom right
+    vertices[2] = (struct vertex)
+    {
+        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .texcoord = (vec2s) { 1.0f, 1.0f, },
+    };
+    // Bottom left
+    vertices[3] = (struct vertex)
+    {
+        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .texcoord = (vec2s) { 0.0f, 1.0f, },
+    };
+
+    vec2s bounds_min = GLMS_VEC2_ZERO, bounds_max = GLMS_VEC2_ZERO;
+
+    if (centre_x)
+    {
+        vertices[0].pos.x = -w / 2.0f;
+        vertices[1].pos.x = w / 2.0f;
+        vertices[2].pos.x = w / 2.0f;
+        vertices[3].pos.x = -w / 2.0f;
+        bounds_min.x = -w / 2.0f;
+        bounds_max.x = w / 2.0f;
     }
     else
     {
-        // Top left
-        vertices[0] = (struct vertex)
-        {
-            .pos      = (vec3s) { 0.0f, h, depth },
-            .texcoord = (vec2s) { 0.0f, 0.0f, },
-        };
-        // Top right
-        vertices[1] = (struct vertex)
-        {
-            .pos      = (vec3s) { w, h, depth },
-            .texcoord = (vec2s) { 1.0f, 0.0f, },
-        };
-        // Bottom right
-        vertices[2] = (struct vertex)
-        {
-            .pos      = (vec3s) { w, 0.0f, depth },
-            .texcoord = (vec2s) { 1.0f, 1.0f, },
-        };
-        // Bottom left
-        vertices[3] = (struct vertex)
-        {
-            .pos      = (vec3s) { 0.0f, 0.0f, depth },
-            .texcoord = (vec2s) { 0.0f, 1.0f, },
-        };
+        vertices[0].pos.x = 0.0f;
+        vertices[1].pos.x = w;
+        vertices[2].pos.x = w;
+        vertices[3].pos.x = 0.0f;
+        bounds_min.x = 0.0f;
+        bounds_max.x = w;
+    }
+    if (centre_y)
+    {
+        vertices[0].pos.y = h / 2.0f;
+        vertices[1].pos.y = h / 2.0f;
+        vertices[2].pos.y = -h / 2.0f;
+        vertices[3].pos.y = -h / 2.0f;
+        bounds_min.y = -h / 2.0f;
+        bounds_max.y = h / 2.0f;
+    }
+    else
+    {
+        vertices[0].pos.y = h;
+        vertices[1].pos.y = h;
+        vertices[2].pos.y = 0.0f;
+        vertices[3].pos.y = 0.0f;
+        bounds_min.y = 0.0f;
+        bounds_max.y = h;
     }
     static const IB_TYPE indices[3 * 4] =
     {
@@ -532,13 +544,32 @@ renderer_get_renderable_quad_dim(
     vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
     ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
 
+    if (make_bounds)
+    {
+        r->bounds.min = bounds_min;
+        r->bounds.max = bounds_max;
+    }
+
     return r;
+}
+
+struct renderable *
+renderer_get_renderable_quad_dim(
+    enum shader_type type,
+    f32 w,
+    f32 h,
+    bool centre,
+    f32 depth)
+{
+    return renderer_get_renderable_quad_dim_explicit(type, 
+        w, h, centre, centre, depth, false);
 }
 
 struct renderable *
 renderer_get_renderable_quad(enum shader_type type, f32 depth)
 {
-    return renderer_get_renderable_quad_dim(type, 0.5f, 0.5f, true, depth);
+    return renderer_get_renderable_quad_dim(type, 
+        1.0f, 1.0f, true, depth);
 }
 
 /*

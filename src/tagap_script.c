@@ -694,6 +694,30 @@ tagap_script_run_cmd_in_state(
         };
     } break;
 
+    // Sets a flashlight on an entity
+    case ATOM_FLASHLIGHT:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        e->flashlight = (struct tagap_entity_flashlight)
+        {
+            .origin = (vec2s)
+            {
+                (f32)ss->tok[0].i,
+                (f32)ss->tok[1].i,
+            },
+            .halo_radius = (f32)ss->tok[2].i / 100.0f,
+            .beam_length = (f32)ss->tok[3].i / 100.0f,
+            .colour = (vec3s)
+            {
+                (f32)ss->tok[4].i / 255.0f,
+                (f32)ss->tok[5].i / 255.0f,
+                (f32)ss->tok[6].i / 255.0f,
+            },
+        };
+    } break;
+
     // Sets a weapon slot
     case ATOM_WEAPON:
     {
