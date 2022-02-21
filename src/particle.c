@@ -12,7 +12,7 @@ const char *PARTICLE_TEX_NAMES[] =
     [PARTICLE_EXPLOSION] = TAGAP_EFFECTS_DIR "/fx_explosion.tga",
 };
 
-static inline i32 
+static inline i32
 particle_lookup_tex_index(enum particle_type part)
 {
     if (g_parts->tex_indices[part] != -1)
@@ -28,7 +28,7 @@ particle_lookup_tex_index(enum particle_type part)
     return g_parts->tex_indices[part];
 }
 
-void 
+void
 particles_init(void)
 {
     g_parts = malloc(sizeof(struct particle_system));
@@ -44,7 +44,7 @@ particles_init(void)
         return;
     }
     g_parts->r->flags |= RENDERABLE_NO_CULL_BIT;
-    
+
     // Set textures to -1 by default to make lookup work
     for (u32 i = 0; i < _PARTICLE_COUNT; ++i)
     {
@@ -81,7 +81,9 @@ particles_init(void)
     if (vulkan_create_buffer(
         (VkDeviceSize)vertices_size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VMA_MEMORY_USAGE_CPU_ONLY,
+        VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &g_parts->staging_buf, &g_parts->staging_buf_alloc) < 0)
@@ -91,20 +93,20 @@ particles_init(void)
     }
 }
 
-void 
+void
 particles_deinit(void)
 {
-    vmaDestroyBuffer(g_vulkan->vma, 
+    vmaDestroyBuffer(g_vulkan->vma,
         g_parts->staging_buf, g_parts->staging_buf_alloc);
     free(g_parts->pool);
     free(g_parts);
 }
 
-void 
+void
 particles_update(void)
 {
     /* Begin render batch */
-    vmaMapMemory(g_vulkan->vma, 
+    vmaMapMemory(g_vulkan->vma,
         g_parts->staging_buf_alloc, (void **)&g_parts->quad_buffer);
     g_parts->quad_ptr = (struct quad_ptl *)g_parts->quad_buffer;
     g_parts->r->ib.index_count = 0;
@@ -129,16 +131,16 @@ particles_update(void)
 
         p->life_remain -= DT;
         f32 life_norm = 1.0f - (p->life_remain / p->props.lifetime);
-        
+
         // Update position, rotation, etc.
-        p->props.pos = 
+        p->props.pos =
             glms_vec2_add(p->props.pos, glms_vec2_scale(p->props.velo, DT));
         p->props.rot += p->props.rot_speed * DT;
 
         // Linearly interpolate properties
-        p->props.size.now = 
+        p->props.size.now =
             lerpf(p->props.size.begin, p->props.size.end, life_norm);
-        p->props.opacity.now = 
+        p->props.opacity.now =
             lerpf(p->props.opacity.begin, p->props.opacity.end, life_norm);
 
         u32 tex_index = particle_lookup_tex_index(p->props.type);
@@ -157,6 +159,8 @@ particles_update(void)
         {
             vertices[v].pos = glms_vec2_add(vertices[v].pos, p->props.pos);
         }
+        // Note we must write sequentially here as we declared
+        // VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
         memcpy(g_parts->quad_ptr++, vertices, sizeof(struct quad_ptl));
         g_parts->r->ib.index_count += 6;
 
@@ -173,10 +177,10 @@ particles_update(void)
         return;
     }
     if (vulkan_copy_buffer(
-        g_parts->staging_buf, 
-        g_parts->r->vb.vk_buffer, 
+        g_parts->staging_buf,
+        g_parts->r->vb.vk_buffer,
         (size_t)(
-            (struct vertex_ptl *)g_parts->quad_ptr - 
+            (struct vertex_ptl *)g_parts->quad_ptr -
             g_parts->quad_buffer) * sizeof(struct vertex_ptl)) < 0)
     {
         LOG_ERROR("[vbuffer] failed to copy staging buffer to vertex buffer");
@@ -185,7 +189,7 @@ particles_update(void)
     // The buffer is now ready to be rendered
 }
 
-void 
+void
 particle_emit(struct particle_system *ps, struct particle_props *props)
 {
     struct particle *p = &ps->pool[ps->index];

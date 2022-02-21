@@ -2,6 +2,7 @@
 #define TAGAP_PCH_H
 
 // Standard libs
+#include <assert.h>
 #include <locale.h>
 #include <memory.h>
 #include <stdio.h>

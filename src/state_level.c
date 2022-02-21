@@ -105,7 +105,16 @@ level_submit_to_renderer(void)
 {
     i32 i;
 
-    // Render background layers first
+    // Polygons are rendered first
+    for (i = 0; i < g_map->polygon_count; ++i)
+    {
+        renderer_add_polygon(&g_map->polygons[i]);
+    }
+
+    // Generate line geometry second
+    renderer_add_linedefs(g_map->linedefs, g_map->linedef_count);
+
+    // Render background layers last
     for (i = 0; i < g_map->layer_count; ++i)
     {
         // Don't render as background if it's not a background
@@ -116,20 +125,12 @@ level_submit_to_renderer(void)
         renderer_add_layer(&g_map->layers[i], i);
     }
 
-    // Polygons are rendered second
-    for (i = 0; i < g_map->polygon_count; ++i)
-    {
-        renderer_add_polygon(&g_map->polygons[i]);
-    }
-
-    // Add any trigger renderers
+    // Add any trigger renderers; these don't use the depth buffer right now so
+    // we don't care about the order.
     for (i = 0; i < g_map->trigger_count; ++i)
     {
         renderer_add_trigger(&g_map->triggers[i]);
     }
-
-    // Finally generate line geometry.
-    renderer_add_linedefs(g_map->linedefs, g_map->linedef_count);
 }
 
 /*
@@ -156,7 +157,7 @@ level_spawn_entities()
         entity_spawn(&g_map->entities[i]);
     }
 
-    // Add environment overlay last
+    // Add environment overlay (is rendered in screen pass)
     g_vulkan->env_tex_index = renderer_add_env(g_map->theme);
     g_map->theme_env_tex.dilation = (vec2s)
     {

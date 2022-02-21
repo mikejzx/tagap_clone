@@ -116,6 +116,7 @@ void vulkan_renderer_wait_for_idle(void);
 i32 vulkan_create_buffer(VkDeviceSize,
     VkBufferUsageFlags,
     VmaMemoryUsage,
+    VmaAllocationCreateFlagBits,
     VkMemoryPropertyFlags,
     VkBuffer *,
     VmaAllocation *);

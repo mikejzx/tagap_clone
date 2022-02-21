@@ -48,8 +48,8 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
      * Choose swapchain present mode
      * FIFO mode (vsync) is guaranteed to be supported
      */
-    VkPresentModeKHR pmode = VSYNC 
-        ? VK_PRESENT_MODE_FIFO_KHR 
+    VkPresentModeKHR pmode = VSYNC
+        ? VK_PRESENT_MODE_FIFO_KHR
         : VK_PRESENT_MODE_IMMEDIATE_KHR;
     if (TRIPLE_BUFFERING)
     {
@@ -123,7 +123,7 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
 //#endif
 
     // Choose how many images to have in swapchain
-    u32 image_count = VSYNC 
+    u32 image_count = VSYNC
         ? (pmode == VK_PRESENT_MODE_MAILBOX_KHR ? 3 : 2)
         : details.capabilities.minImageCount;
 
@@ -201,7 +201,7 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
     vkGetSwapchainImagesKHR(g_vulkan->d,
         swapchain->handle, &schain_image_count, swapchain->images);
 
-    LOG_DBUG("[vulkan] got %d swapchain images (vsync:%d triple buffering:%d)", 
+    LOG_DBUG("[vulkan] got %d swapchain images (vsync:%d triple buffering:%d)",
         swapchain->image_count, VSYNC, TRIPLE_BUFFERING);
 
     /*
@@ -275,7 +275,8 @@ vulkan_swapchain_create(struct vulkan_swapchain *swapchain)
         };
         const VmaAllocationCreateInfo image_alloc_info =
         {
-            .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
             .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         };
         if (vmaCreateImage(g_vulkan->vma,

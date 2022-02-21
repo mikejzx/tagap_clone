@@ -16,7 +16,9 @@ ib_new(struct ibuffer *ib, const void *indices, size_t size)
     if (vulkan_create_buffer(
         (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VMA_MEMORY_USAGE_CPU_ONLY,
+        VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &staging_buf, &staging_buf_alloc) < 0)
@@ -42,7 +44,8 @@ ib_new(struct ibuffer *ib, const void *indices, size_t size)
     if (vulkan_create_buffer(
         (VkDeviceSize)size,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        0,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &ib->vk_buffer, &ib->vma_alloc) < 0)
     {

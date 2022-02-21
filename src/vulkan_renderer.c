@@ -1764,6 +1764,7 @@ vulkan_create_buffer(
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VmaMemoryUsage usage_vma,
+    VmaAllocationCreateFlagBits flags_vma,
     VkMemoryPropertyFlags props,
     VkBuffer *buffer,
     VmaAllocation *allocation)
@@ -1781,6 +1782,7 @@ vulkan_create_buffer(
     {
         .usage = usage_vma,
         .requiredFlags = props,
+        .flags = flags_vma,
     };
     if (vmaCreateBuffer(g_vulkan->vma,
         &buffer_info,
@@ -1979,7 +1981,9 @@ vulkan_texture_create(u8 *pixels, i32 w, i32 h,
     if (vulkan_create_buffer(
         size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VMA_MEMORY_USAGE_CPU_ONLY,
+        VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         &staging_buf,
@@ -2020,7 +2024,7 @@ skip_tex_transfer:
     };
     const VmaAllocationCreateInfo image_alloc_info =
     {
-        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     };
     if (vmaCreateImage(g_vulkan->vma,
@@ -2346,7 +2350,7 @@ vulkan_create_zbuffer(void)
     };
     const VmaAllocationCreateInfo image_alloc_info =
     {
-        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     };
     if (vmaCreateImage(g_vulkan->vma,
