@@ -45,6 +45,7 @@ enum renderable_flag
     RENDERABLE_TEX_SCALE_BIT = 8,
     RENDERABLE_FLIPPED_BIT = 16,
     RENDERABLE_EXTRA_SHADING_BIT = 32,
+    RENDERABLE_SCALED_BIT = 64,
 };
 
 struct renderable
@@ -57,14 +58,16 @@ struct renderable
     vec2s offset;
     f32 rot;
     vec2s tex_offset;
+    f32 scale; // Requires SCALED
 
-    // Additional shading multiplier
+    // Additional shading multiplier (requires EXTRA_SHADING)
     union
     {
         vec4s extra_shading, light_colour;
     };
 
     // For culling objects outside of the viewport
+    // (ignored if NO_CULL)
     struct
     {
         vec2s min, max;
@@ -98,6 +101,7 @@ void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);
 void renderer_add_trigger(struct tagap_trigger *);
 void renderer_add_polygon_fade(struct tagap_polygon *);
-struct renderable *renderer_add_env(struct tagap_theme_info *);
+//struct renderable *renderer_add_env(struct tagap_theme_info *);
+i32 renderer_add_env(struct tagap_theme_info *);
 
 #endif

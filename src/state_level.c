@@ -157,9 +157,14 @@ level_spawn_entities()
     }
 
     // Add environment overlay last
-    // (Disabled until we implement a pipeline that has no depth buffer), as
-    // this overlay screws around with it a lot
-    g_map->theme_env_tex = renderer_add_env(g_map->theme);
+    g_vulkan->env_tex_index = renderer_add_env(g_map->theme);
+    g_map->theme_env_tex.dilation = (vec2s)
+    {
+        WIDTH / g_vulkan->textures[g_vulkan->env_tex_index].w / 1.5f,
+        HEIGHT / g_vulkan->textures[g_vulkan->env_tex_index].h / 12.0f,
+    };
+    g_map->theme_env_tex.exists = true;
+    vulkan_update_sp2_descriptors();
 
     // Set reload timers for weapons (as the original game seems to only
     // support reloading for slot 0)
@@ -201,28 +206,22 @@ level_update()
         g_map->layers[i].r->pos = (vec2s)
         {
             g_state.cam_pos.x,
-            g_state.cam_pos.y + 
+            g_state.cam_pos.y +
                 g_vulkan->textures[g_map->layers[i].r->tex].h +
                 g_map->layers[i].offset_y,
         };
         // Apply parallax background effects
         g_map->layers[i].r->tex_offset = (vec2s)
         {
-            g_map->layers[i].scroll_speed_mul * 
+            g_map->layers[i].scroll_speed_mul *
                 (g_state.cam_pos.x / WIDTH_INTERNAL) * 0.5f,
-            0.0f 
+            0.0f
         };
     }
 
-    // Update environment overlay quad position
-    if (g_map->theme_env_tex)
+    if (g_map->theme_env_tex.exists)
     {
-        g_map->theme_env_tex->pos = (vec2s)
-        {
-            g_state.cam_pos.x,
-            g_state.cam_pos.y + HEIGHT_INTERNAL,
-        };
-        g_map->theme_env_tex->tex_offset.y -= DT * 4.0f;
+        g_map->theme_env_tex.offset.y -= DT * 5.0f;
     }
 }
 
@@ -234,7 +233,7 @@ level_add_entity(struct tagap_entity_info *info)
 {
     if (g_map->entity_count + 1 >= LEVEL_MAX_ENTITIES)
     {
-        LOG_ERROR("[state_level]: entity limit (%d) exceeded", 
+        LOG_ERROR("[state_level]: entity limit (%d) exceeded",
             LEVEL_MAX_ENTITIES);
         return NULL;
     }

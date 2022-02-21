@@ -60,7 +60,6 @@ static i32 vulkan_create_descriptor_pool(void);
 static i32 vulkan_setup_textures(void);
 static i32 vulkan_texture_create(u8 *, i32, i32,
     VkDeviceSize, VkImageUsageFlagBits, VkFormat, struct vulkan_texture *);
-static i32 vulkan_setup_sp2_descriptors(void);
 static i32 vulkan_rewrite_descriptors(void);
 
 static VkCommandBuffer vulkan_begin_oneshot_cmd(void);
@@ -104,7 +103,7 @@ vulkan_renderer_init(SDL_Window *handle)
     (status = vulkan_create_sync_objects()) < 0 ||
     (status = vulkan_create_descriptor_pool()) < 0 ||
     (status = vulkan_setup_textures()) < 0 ||
-    (status = vulkan_setup_sp2_descriptors()) < 0 ||
+    (status = vulkan_update_sp2_descriptors()) < 0 ||
     (status = vulkan_rewrite_descriptors()) < 0 ||
     (status = vulkan_create_command_buffers()) < 0);
     return status;
@@ -753,7 +752,7 @@ vulkan_create_light_render_pass(void)
     // Colour buffer attachment description
     VkAttachmentDescription colour_attachment =
     {
-        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -870,6 +869,14 @@ vulkan_create_descriptor_set_layout(void)
         {
             // Lightmap texture
             .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .pImmutableSamplers = NULL,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
+        {
+            // Environment (e.g. rain) texture
+            .binding = 2,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .pImmutableSamplers = NULL,
@@ -1150,6 +1157,8 @@ vulkan_record_command_buffers(
                  [THEME_AFFECT_WORLD][THEME_STATE_BASE].z * dim,
              1.0f,
         },
+        .env.texcoord_mul = g_map->theme_env_tex.dilation,
+        .env.texcoord_offset = g_map->theme_env_tex.offset,
     };
     vkCmdPushConstants(cbuf,
         shad_sp2->pipeline_layout,
@@ -1209,6 +1218,15 @@ vulkan_record_obj_command_buffer(
         obj->pos.y - obj->offset.y,
         0.0f
     });
+    // Apply object scale
+    if (obj->flags & RENDERABLE_SCALED_BIT)
+    {
+        m_m = glms_scale(m_m, (vec3s)
+        {
+            obj->scale, obj->scale, 1.0f
+        });
+    }
+
     m_m.raw[0][0] *= flip_sign;
     m_m.raw[1][1] *= -1.0f;
     if (obj->rot != 0.0f)
@@ -1603,7 +1621,7 @@ vulkan_create_descriptor_pool()
         {
             // Subpass 2: "lightmap" texture
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = swapchain->image_count,
+            .descriptorCount = swapchain->image_count * 2,
         },
     };
     VkDescriptorPoolCreateInfo pool_info =
@@ -1709,7 +1727,7 @@ vulkan_setup_textures(void)
             lightmap_w,
             lightmap_h, 0,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
             &g_vulkan->light_tex[i]) < 0)
         {
             LOG_ERROR("[vulkan] failed to create lightmap texture");
@@ -2144,35 +2162,38 @@ vulkan_level_end(void)
     return status;
 }
 
-static i32
-vulkan_setup_sp2_descriptors(void)
+i32
+vulkan_update_sp2_descriptors(void)
 {
-    // Create descriptor sets
-    VkDescriptorSetLayout *layouts =
-        malloc(swapchain->image_count * sizeof(VkDescriptorSetLayout));
-    for (u32 i = 0; i < swapchain->image_count; ++i)
+    if (!g_vulkan->desc_sets_sp2)
     {
-        layouts[i] = g_vulkan->desc_set_layout_sp2;
-    }
-    const VkDescriptorSetAllocateInfo alloc_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = g_vulkan->desc_pool,
-        .descriptorSetCount = swapchain->image_count,
-        .pSetLayouts = layouts,
-    };
+        // Create descriptor sets
+        VkDescriptorSetLayout *layouts =
+            malloc(swapchain->image_count * sizeof(VkDescriptorSetLayout));
+        for (u32 i = 0; i < swapchain->image_count; ++i)
+        {
+            layouts[i] = g_vulkan->desc_set_layout_sp2;
+        }
+        const VkDescriptorSetAllocateInfo alloc_info =
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = g_vulkan->desc_pool,
+            .descriptorSetCount = swapchain->image_count,
+            .pSetLayouts = layouts,
+        };
 
-    // Allocate descriptor sets
-    g_vulkan->desc_sets_sp2 =
-        malloc(swapchain->image_count * sizeof(VkDescriptorSet));
-    if (vkAllocateDescriptorSets(g_vulkan->d,
-        &alloc_info, g_vulkan->desc_sets_sp2) != VK_SUCCESS)
-    {
-        LOG_ERROR("[vulkan] failed to allocate descriptor sets for subpass 2");
+        // Allocate descriptor sets
+        g_vulkan->desc_sets_sp2 =
+            malloc(swapchain->image_count * sizeof(VkDescriptorSet));
+        if (vkAllocateDescriptorSets(g_vulkan->d,
+            &alloc_info, g_vulkan->desc_sets_sp2) != VK_SUCCESS)
+        {
+            LOG_ERROR("[vulkan] failed to allocate descriptor sets for subpass 2");
+            free(layouts);
+            return -1;
+        }
         free(layouts);
-        return -1;
     }
-    free(layouts);
 
     for (u32 i = 0; i < swapchain->image_count; ++i)
     {
@@ -2187,6 +2208,12 @@ vulkan_setup_sp2_descriptors(void)
         {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView = g_vulkan->light_tex[i].view,
+            .sampler = g_vulkan->sampler,
+        },
+        info_envtex =
+        {
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .imageView = g_vulkan->textures[g_vulkan->env_tex_index].view,
             .sampler = g_vulkan->sampler,
         };
 
@@ -2211,6 +2238,16 @@ vulkan_setup_sp2_descriptors(void)
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = 1,
                 .pImageInfo = &info_lightmap,
+            },
+            {
+                // Environment (rain) texture
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = g_vulkan->desc_sets_sp2[i],
+                .dstBinding = 2,
+                .dstArrayElement = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .pImageInfo = &info_envtex,
             },
         };
 

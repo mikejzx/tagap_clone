@@ -11,10 +11,14 @@ layout(push_constant) uniform constants
 {
     // Level theme shading colour
     vec4 shading;
+
+    // Offset of environment texture
+    vec4 env_tex_offsets;
 } pconsts;
 
 layout(location = 0) out vec4 v_Shading;
 layout(location = 1) out vec2 v_Texcoord;
+layout(location = 2) out vec4 v_EnvTexcoords;
 
 void main()
 {
@@ -24,4 +28,5 @@ void main()
         0.0f, 1.0f);
     v_Texcoord = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
     v_Shading = pconsts.shading;
+    v_EnvTexcoords = pconsts.env_tex_offsets;
 }

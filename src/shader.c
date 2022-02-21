@@ -39,7 +39,6 @@ g_shader_list[SHADER_COUNT] =
                 .offset = offsetof(struct vertex, texcoord),
             },
         },
-        .vertex_attr_count = 2,
     },
     // Same as default shader except this does not use depth testing; we use
     // this for entities, etc. to allow for full proper alpha without glitching
@@ -75,7 +74,6 @@ g_shader_list[SHADER_COUNT] =
                 .offset = offsetof(struct vertex, texcoord),
             },
         },
-        .vertex_attr_count = 2,
     },
     // Vertex-lit shader, currently used for rendering the '(fade)' texture
     [SHADER_VERTEXLIT] =
@@ -109,7 +107,6 @@ g_shader_list[SHADER_COUNT] =
                 .offset = offsetof(struct vertex_vl, colour),
             },
         },
-        .vertex_attr_count = 2,
     },
     // Particle rendering shader
     [SHADER_PARTICLE] =
@@ -151,7 +148,6 @@ g_shader_list[SHADER_COUNT] =
                 .offset = offsetof(struct vertex_ptl, tex_index),
             },
         },
-        .vertex_attr_count = 3,
     },
     // Light rendering shader
     [SHADER_LIGHT] =
@@ -186,7 +182,6 @@ g_shader_list[SHADER_COUNT] =
                 .offset = offsetof(struct vertex, texcoord),
             },
         },
-        .vertex_attr_count = 2,
     },
     // Subpass 2 shader
     [SHADER_SCREENSUBPASS] =
@@ -196,7 +191,6 @@ g_shader_list[SHADER_COUNT] =
         .use_descriptor_sets = true,
         .depth_test = false,
         .blending = false,
-        .vertex_attr_count = 0,
     },
 };
 
@@ -335,12 +329,18 @@ shader_init(
     }
     else
     {
+        u32 desc_count;
+        for (desc_count = 0; desc_count < MAX_VERTEX_ATTR; ++desc_count)
+        {
+            if (s->vertex_attr_desc[desc_count].location == 0 &&
+                desc_count != 0) break;
+        }
         vertex_input_info = (VkPipelineVertexInputStateCreateInfo)
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
             .vertexBindingDescriptionCount = 1,
             .pVertexBindingDescriptions = &s->vertex_binding_desc,
-            .vertexAttributeDescriptionCount = s->vertex_attr_count,
+            .vertexAttributeDescriptionCount = desc_count,
             .pVertexAttributeDescriptions = s->vertex_attr_desc,
         };
     }

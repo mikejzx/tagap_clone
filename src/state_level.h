@@ -67,7 +67,12 @@ struct state_level
 
         // Level theme
         struct tagap_theme_info *theme;
-        struct renderable *theme_env_tex;
+        struct
+        {
+            bool exists;
+            vec2s dilation;
+            vec2s offset;
+        } theme_env_tex;
 
         // Current depth amount in the level
         u32 current_depth, current_entity_depth;

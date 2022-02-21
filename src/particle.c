@@ -9,7 +9,7 @@ struct particle_system *g_parts;
 const char *PARTICLE_TEX_NAMES[] =
 {
     [PARTICLE_SMOKE] = TAGAP_EFFECTS_DIR "/particle_smoke.tga",
-    [PARTICLE_LIGHT] = TAGAP_EFFECTS_DIR "/fx_light.tga",
+    [PARTICLE_EXPLOSION] = TAGAP_EFFECTS_DIR "/fx_explosion.tga",
 };
 
 static inline i32 

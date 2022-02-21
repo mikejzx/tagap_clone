@@ -41,5 +41,8 @@ struct particle_emitter
 };
 
 void entity_apply_particle_fx(struct tagap_entity *);
+void entity_weapon_fired_particle_fx(
+    struct tagap_entity *,
+    struct tagap_entity_info *);
 
 #endif

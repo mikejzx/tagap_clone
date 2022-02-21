@@ -110,6 +110,13 @@ struct push_constants_sp2
 {
     // Shading colour
     vec4s shade_colour;
+
+    // Environment texture coordinate dilation and offsets
+    struct
+    {
+        vec2s texcoord_mul;
+        vec2s texcoord_offset;
+    } env;
 };
 
 struct shader
@@ -126,7 +133,6 @@ struct shader
     // Vertex buffer info
     VkVertexInputBindingDescription vertex_binding_desc;
     VkVertexInputAttributeDescription vertex_attr_desc[MAX_VERTEX_ATTR];
-    u32 vertex_attr_count;
 
     // Whether to use descriptor sets
     bool use_descriptor_sets;

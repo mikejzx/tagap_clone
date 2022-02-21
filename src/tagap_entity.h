@@ -28,7 +28,11 @@ enum tagap_entity_stat_id
 
     // FX stats
     STAT_FX_DIM,
+    STAT_FX_EXPAND,
+    STAT_FX_FADE,
+    STAT_FX_MUZZLE,
     STAT_FX_OFFSXFACE,
+    STAT_FX_PUSHUP,
     STAT_FX_RENDERFIRST,
     STAT_FX_SMOKE,
 
@@ -47,7 +51,11 @@ static const char *STAT_NAMES[] =
     [STAT_DAMAGE]         = "DAMAGE",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
     [STAT_FX_DIM]         = "FX_DIM",
+    [STAT_FX_EXPAND]      = "FX_EXPAND",
+    [STAT_FX_FADE]        = "FX_FADE",
+    [STAT_FX_MUZZLE]      = "FX_MUZZLE",
     [STAT_FX_OFFSXFACE]   = "FX_OFFSXFACE",
+    [STAT_FX_PUSHUP]      = "FX_PUSHUP",
     [STAT_FX_RENDERFIRST] = "FX_RENDERFIRST",
     [STAT_FX_SMOKE]       = "FX_SMOKE",
     [STAT_S_AKIMBO]       = "S_AKIMBO",
@@ -168,7 +176,7 @@ entity_info_clone(
     a->gun_entity = b->gun_entity;
     a->has_weapon = b->has_weapon;
     memcpy(&a->light, &b->light, sizeof(struct tagap_entity_light));
-    memcpy(&a->flashlight, &b->flashlight, 
+    memcpy(&a->flashlight, &b->flashlight,
         sizeof(struct tagap_entity_flashlight));
 }
 
@@ -212,6 +220,9 @@ struct tagap_entity
 
         // Whether to fire weapon.
         bool fire;
+
+        // Whether to belly-slide
+        bool bellyslide;
     } inputs;
 
     // Normalised velocity
@@ -226,6 +237,9 @@ struct tagap_entity
     // Jumping stuff for walking entities
     f32 jump_timer;
     bool jump_reset;
+
+    // Player belly sliding
+    f32 slide_timer;
 
     // ANIM_FACE blinking
     u64 next_blink;
@@ -268,6 +282,10 @@ struct tagap_entity
 
     // Flashlight renderer
     struct renderable *r_flashlight;
+
+    // Muzzle flash (light) renderer
+    struct renderable *r_muzzle;
+    f32 muzzle_timer;
 };
 
 void entity_spawn(struct tagap_entity *);

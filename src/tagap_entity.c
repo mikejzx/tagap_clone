@@ -9,7 +9,11 @@
 #include "particle_emitter.h"
 
 #define KICK_TIMER_MAX (0.1f)
-#define KICK_AMOUNT (16.0f)
+#define KICK_AMOUNT (17.0f)
+#define PUSHUP_MAX_ANGLE (5.0f)
+#define MUZZLE_BASE_SIZE_MUL (1.6f)
+#define MUZZLE_INTENSITY (30.0f)
+#define MUZZLE_FLASH_SPEED (12.5f)
 
 static void entity_spawn_missile(struct tagap_entity *,
     struct tagap_entity_info *);
@@ -75,6 +79,20 @@ entity_spawn(struct tagap_entity *e)
             r->flags |= RENDERABLE_NO_CULL_BIT;
         }
 
+        if (e->info->stats[STAT_FX_EXPAND])
+        {
+            // Enable scaling on texture
+            r->flags |= RENDERABLE_SCALED_BIT;
+            r->scale = 1.0f;
+        }
+
+        if (e->info->stats[STAT_FX_FADE])
+        {
+            // Enable extra shading, and modify the alpha channel to fade it
+            r->flags |= RENDERABLE_EXTRA_SHADING_BIT;
+            r->extra_shading = (vec4s)GLMS_VEC4_ONE_INIT;
+        }
+
         ++g_map->current_entity_depth;
     }
 
@@ -84,12 +102,12 @@ entity_spawn(struct tagap_entity *e)
     if (e->info->think.mode == THINK_AI_USER)
     {
         e->weapons[0].ammo = 15;
-        e->weapons[1].ammo = 30;
-        e->weapons[2].ammo = 40;
-        e->weapons[3].ammo = 70;
-        e->weapons[4].ammo = 50;
-        e->weapons[5].ammo = 50;
-        e->weapons[6].ammo = 50;
+        e->weapons[1].ammo = 300;
+        e->weapons[2].ammo = 400;
+        e->weapons[3].ammo = 700;
+        e->weapons[4].ammo = 500;
+        e->weapons[5].ammo = 500;
+        e->weapons[6].ammo = 500;
         //e->weapons[0].has_akimbo = true;
     }
 #endif
@@ -106,6 +124,38 @@ entity_spawn(struct tagap_entity *e)
         {
             e->weapons[i].reload_timer = -1.0f;
         }
+
+        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_light.tga");
+        if (tex <= 0)
+        {
+            LOG_ERROR("[tagap_entity] failed to add muzzle (no texture)");
+            return;
+        }
+
+        // Create muzzle flash light
+        e->r_muzzle = renderer_get_renderable_quad_dim_explicit(
+            SHADER_LIGHT,
+            g_vulkan->textures[tex].w * MUZZLE_BASE_SIZE_MUL,
+            g_vulkan->textures[tex].h * MUZZLE_BASE_SIZE_MUL,
+            true,
+            true,
+            0.0f,
+            true);
+        if (!e->r_muzzle)
+        {
+            LOG_ERROR("[tagap_entity] failed to add muzzle flash light");
+            return;
+        }
+        e->r_muzzle->tex = tex;
+        e->r_muzzle->light_colour = (vec4s)
+        {
+            1.0f * MUZZLE_INTENSITY,
+            0.8f * MUZZLE_INTENSITY,
+            0.0f * MUZZLE_INTENSITY,
+            1.0f,
+        };
+        e->r_muzzle->flags |= RENDERABLE_SCALED_BIT;
+        e->r_muzzle->scale = 1.0f;
     }
 
     // Create entity light renderable
@@ -142,6 +192,13 @@ entity_spawn(struct tagap_entity *e)
             e->info->light.colour.z * e->info->light.intensity,
             1.0f,
         };
+
+        // Enable light expanding
+        if (e->info->stats[STAT_FX_EXPAND])
+        {
+            e->r_light->flags |= RENDERABLE_SCALED_BIT;
+            e->r_light->scale = 1.0f;
+        }
     }
 
     // Create entity flashlight renderable
@@ -160,7 +217,7 @@ entity_spawn(struct tagap_entity *e)
         e->r_flashlight = renderer_get_renderable_quad_dim_explicit(
             SHADER_LIGHT,
             g_vulkan->textures[tex].w * e->info->flashlight.beam_length * 2.0f,
-            g_vulkan->textures[tex].h * e->info->flashlight.halo_radius * 0.5f,
+            g_vulkan->textures[tex].h * e->info->flashlight.halo_radius * 0.65f,
             false,
             true,
             0.0f,
@@ -232,6 +289,7 @@ entity_spawn(struct tagap_entity *e)
         }
     }
 
+    entity_reset(e, e->position, e->aim_angle, e->flipped);
     e->is_spawned = true;
 }
 
@@ -253,13 +311,13 @@ entity_update(struct tagap_entity *e)
         e->weapon_kick_timer = max(e->weapon_kick_timer - DT, 0.0f);
 
         struct tagap_entity_info *missile_info =
-            g_state.l.weapons[e->weapon_slot].primary;
+            g_level->weapons[e->weapon_slot].primary;
 
         // Fire weapon
         f32 attack_delay = missile_info->think.attack_delay;
         if (e->weapon_slot == 0 && !e->weapons[0].has_akimbo)
         {
-            attack_delay *= 2.0f;
+            attack_delay *= 1.2f;
         }
         if (e->weapons[e->weapon_slot].reload_timer < 0.0f &&
             e->weapons[e->weapon_slot].ammo > 0 &&
@@ -267,6 +325,8 @@ entity_update(struct tagap_entity *e)
             e->attack_timer > attack_delay)
         {
             entity_spawn_missile(e, missile_info);
+            entity_weapon_fired_particle_fx(e, missile_info);
+            e->muzzle_timer = 1.0f;
             e->attack_timer = 0.0f;
             e->weapon_kick_timer = KICK_TIMER_MAX;
 
@@ -408,6 +468,14 @@ entity_update(struct tagap_entity *e)
             sprite_rot_offset += tangent;
         }
 
+#if SLIDE_ENABLED
+        if (e->slide_timer >= 0.0f)
+        {
+            sprite_rot_offset =
+                lerpf(0.0f, -90.0f, clamp01(e->slide_timer / 0.1f));
+        }
+#endif
+
         // By default use entity position and normal rotation
         vec2s spr_pos = sprite_offset;
         f32 spr_rot =  entity_get_rot(e) + sprite_rot_offset;
@@ -442,8 +510,19 @@ entity_update(struct tagap_entity *e)
                     g_level->weapons[e->weapon_slot].reload_time) * -360.0f;
             }
 
+            // Recoil effect
+            f32 pushup_rot = 0.0f;
+            if (e->weapon_slot >= 0 && e->weapon_slot < WEAPON_SLOT_COUNT &&
+                g_level->weapons[e->weapon_slot].primary &&
+                g_level->weapons[e->weapon_slot].primary->
+                    stats[STAT_FX_PUSHUP])
+            {
+                pushup_rot = clamp01(e->weapon_kick_timer / KICK_TIMER_MAX)
+                    * PUSHUP_MAX_ANGLE;
+            }
+
             // Rotate weapons to the aim angle
-            spr_rot = e->aim_angle + reload_angle;
+            spr_rot = e->aim_angle + reload_angle + pushup_rot;
 
             // Apply weapon kick animation
             f32 kick_value = KICK_AMOUNT * e->weapon_kick_timer;
@@ -531,16 +610,16 @@ entity_update(struct tagap_entity *e)
         }), e->info->offsets[OFFSET_FX_OFFSET]);
         e->r_light->pos.y *= -1.0f;
 
-        // Update entity light dim
-        e->timer_dim += (DT + e->info->stats[STAT_FX_DIM]) * 4.0f;
+        // Update entity light dim (don't modify alpha as e.g. FX_FADE can
+        // modify it)
+        e->timer_dim += (DT + e->info->stats[STAT_FX_DIM]) * 6.75f;
         f32 dim = (sinf(e->timer_dim) + 1.0f) / 4.0f + 0.5f;
-        e->r_light->light_colour = (vec4s)
-        {
-            e->info->light.colour.x * e->info->light.intensity * dim,
-            e->info->light.colour.y * e->info->light.intensity * dim,
-            e->info->light.colour.z * e->info->light.intensity * dim,
-            1.0f,
-        };
+        e->r_light->light_colour.x =
+            e->info->light.colour.x * e->info->light.intensity * dim;
+        e->r_light->light_colour.y =
+            e->info->light.colour.y * e->info->light.intensity * dim;
+        e->r_light->light_colour.z =
+            e->info->light.colour.z * e->info->light.intensity * dim;
     }
 
     if (e->r_flashlight)
@@ -548,10 +627,43 @@ entity_update(struct tagap_entity *e)
         // Update flashlight position and rotation
         vec2s origin = e->info->flashlight.origin;
         //origin.y *= -1.0f;
-        e->r_flashlight->pos = glms_vec2_add(e->position, origin);
+        e->r_flashlight->pos = e->position;
+        e->r_flashlight->offset = origin;
+        e->r_flashlight->offset.x -= 24.0f * cosf(glm_rad(e->aim_angle));
+        e->r_flashlight->offset.y -= 24.0f * sinf(glm_rad(e->aim_angle));
         e->r_flashlight->pos.y *= -1.0f;
         e->r_flashlight->rot = e->aim_angle;
         SET_BIT(e->r_flashlight->flags, RENDERABLE_FLIPPED_BIT, e->flipped);
+    }
+
+    if (e->r_muzzle)
+    {
+        struct tagap_entity_info *missile =
+            g_level->weapons[e->weapon_slot].primary;
+        f32 xflip = (f32)e->flipped * -2.0f + 1.0f;
+        mat3s mat = GLMS_MAT3_IDENTITY_INIT;
+        mat = glms_rotate2d(mat, glm_rad(e->aim_angle) * xflip);
+        vec3s offset = (vec3s)
+        {
+            missile->offsets[OFFSET_WEAPON_OFFSET].x * xflip,
+            missile->offsets[OFFSET_WEAPON_OFFSET].y,
+        };
+        offset = glms_mat3_mulv(mat, offset);
+        vec2s offset2 = (vec2s){ offset.x, offset.y };
+        vec2s pos = glms_vec2_add(e->position, offset2);
+        pos.y += missile->offsets[OFFSET_WEAPON_ORIGIN].y;
+        pos.x += missile->offsets[OFFSET_WEAPON_ORIGIN].x * xflip;
+        pos.y *= -1.0f;
+
+        // Update muzzle light
+        e->r_muzzle->pos = pos;
+        e->r_muzzle->scale = clamp01(e->muzzle_timer) *
+            g_level->weapons[e->weapon_slot].primary->stats[STAT_FX_MUZZLE] /
+            100.0f;
+        if (e->muzzle_timer >= 0.0f)
+        {
+            e->muzzle_timer -= DT * MUZZLE_FLASH_SPEED;
+        }
     }
 
     // Apply particle effects
@@ -570,7 +682,7 @@ entity_free(struct tagap_entity *e)
 void
 entity_die(struct tagap_entity *e)
 {
-    // Die effects (e.g. explosion, etc.)
+    // Die effects/gibs (e.g. explosion, etc.)
     // ...
 
     // Move missile back into pool if it is pooled
@@ -591,13 +703,15 @@ entity_reset(
     // Reset timers
     e->bobbing_timer = 0.0f;
     e->bobbing_timer_last = 0.0f;
-    e->jump_timer = 0.0f;
+    e->jump_timer = -1.0f;
     e->jump_reset = false;
+    e->slide_timer = -1.0f;
     e->next_blink = 0;
     e->blink_timer = 0;
     e->timer_tempmissile = 0.0f;
     e->attack_timer = 0.0f;
     e->timer_dim = 0.0f;
+    e->muzzle_timer = -1.0f;
 }
 
 void
@@ -617,6 +731,8 @@ entity_spawn_missile(
         spawn_pos,
         owner->aim_angle,
         owner->flipped);
+    missile_e->owner = owner;
+    missile_e->with_owner = false;
 }
 
 /*
@@ -640,6 +756,10 @@ entity_set_inactive_hidden(struct tagap_entity *e, bool h)
     {
         SET_BIT(e->r_flashlight->flags, RENDERABLE_HIDDEN_BIT, h);
     }
+    if (e->r_muzzle)
+    {
+        SET_BIT(e->r_muzzle->flags, RENDERABLE_HIDDEN_BIT, h);
+    }
 }
 
 /*
@@ -655,7 +775,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
     {
         // The missile contains info about what gunentity to use
         struct tagap_entity_info *missile_info =
-            g_state.l.weapons[w].primary;
+            g_level->weapons[w].primary;
 
         if (!missile_info || !missile_info->gun_entity)
         {

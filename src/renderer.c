@@ -393,36 +393,36 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             // Top left
             info->v[cur_l * 4 + 0] = (struct vertex_vl)
             {
-                .pos = (vec3s) 
-                { 
-                    l->start.x, l->start.y + info->height, DEPTH_LINEDEFS 
+                .pos = (vec3s)
+                {
+                    l->start.x, l->start.y + info->height, DEPTH_LINEDEFS
                 },
                 .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 0.0f, },
             };
             // Top right
             info->v[cur_l * 4 + 1] = (struct vertex_vl)
             {
-                .pos = (vec3s) 
-                { 
-                    l->end.x, l->end.y + info->height, DEPTH_LINEDEFS 
+                .pos = (vec3s)
+                {
+                    l->end.x, l->end.y + info->height, DEPTH_LINEDEFS
                 },
                 .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 0.0f, },
             };
             // Bottom right
             info->v[cur_l * 4 + 2] = (struct vertex_vl)
             {
-                .pos = (vec3s) 
-                { 
-                    l->end.x, l->end.y, DEPTH_LINEDEFS 
+                .pos = (vec3s)
+                {
+                    l->end.x, l->end.y, DEPTH_LINEDEFS
                 },
                 .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 1.0f, },
             };
             // Bottom left
             info->v[cur_l * 4 + 3] = (struct vertex_vl)
             {
-                .pos = (vec3s) 
-                { 
-                    l->start.x, l->start.y, DEPTH_LINEDEFS 
+                .pos = (vec3s)
+                {
+                    l->start.x, l->start.y, DEPTH_LINEDEFS
                 },
                 .colour = (vec4s) { 0.0f, 0.0f, 0.0f, 1.0f, },
             };
@@ -675,14 +675,14 @@ renderer_get_renderable_quad_dim(
     bool centre,
     f32 depth)
 {
-    return renderer_get_renderable_quad_dim_explicit(type, 
+    return renderer_get_renderable_quad_dim_explicit(type,
         w, h, centre, centre, depth, false);
 }
 
 struct renderable *
 renderer_get_renderable_quad(enum shader_type type, f32 depth)
 {
-    return renderer_get_renderable_quad_dim(type, 
+    return renderer_get_renderable_quad_dim(type,
         1.0f, 1.0f, true, depth);
 }
 
@@ -754,15 +754,15 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
     ib_new(&r->ib, indices, index_buf_size);
 }
 
-struct renderable *
+i32
 renderer_add_env(struct tagap_theme_info *theme)
 {
     // No environment texture to add
-    if (theme->env == ENVIRON_NONE) return NULL;
+    if (theme->env == ENVIRON_NONE) return 0;
 
     // Unimplemented for no
     if (theme->env == ENVIRON_UNDERWATER ||
-        theme->env == ENVIRON_RAININT) return NULL;
+        theme->env == ENVIRON_RAININT) return 0;
 
     static const char *ENV_TEX_NAMES[] =
     {
@@ -779,73 +779,7 @@ renderer_add_env(struct tagap_theme_info *theme)
     {
         LOG_WARN("[renderer] can't add environment texture "
             "(couldn't load texture for env %d)", theme->env);
-        return NULL;
+        return 0;
     }
-
-    // Create a fullscreen quad
-    struct renderable *r =
-        renderer_get_renderable(SHADER_DEFAULT_NO_ZBUFFER);
-    if (!r) return NULL;
-
-    r->tex = tex_index;
-    vec2s tex_size =
-    {
-        (f32)g_vulkan->textures[tex_index].w * 1.5f,
-        (f32)g_vulkan->textures[tex_index].h * 1.5f,
-    };
-    r->flags |= RENDERABLE_NO_CULL_BIT |
-        RENDERABLE_SHADED_BIT |
-        RENDERABLE_EXTRA_SHADING_BIT;
-    r->extra_shading = (vec4s){ 1.0f, 1.0f, 1.0f, 0.20f};
-
-    f32 w = WIDTH, h = HEIGHT, depth = DEPTH_ENV;
-
-    // Create vertices
-    struct vertex vertices[4];
-    // Top left
-    vertices[0] = (struct vertex)
-    {
-        .pos      = (vec3s) { 0.0f, h, depth },
-        .texcoord = (vec2s) { 0.0f, 0.0f, },
-    };
-    // Top right
-    vertices[1] = (struct vertex)
-    {
-        .pos      = (vec3s) { w, h, depth },
-        .texcoord = (vec2s)
-        {
-             w / tex_size.x * 1.35f,
-             0.0f
-        },
-    };
-    // Bottom right
-    vertices[2] = (struct vertex)
-    {
-        .pos      = (vec3s) { w, 0.0f, depth },
-        .texcoord = (vec2s)
-        {
-             w / tex_size.x * 1.35f,
-             h / tex_size.y / 6.8f,
-        },
-    };
-    // Bottom left
-    vertices[3] = (struct vertex)
-    {
-        .pos      = (vec3s) { 0.0f, 0.0f, depth },
-        .texcoord = (vec2s)
-        {
-             0.0f,
-             h / tex_size.y / 6.8f,
-        },
-    };
-    static const IB_TYPE indices[3 * 4] =
-    {
-        0, 1, 2,
-        0, 2, 3
-    };
-
-    vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
-    ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
-
-    return r;
+    return tex_index;
 }

@@ -19,7 +19,7 @@ struct shader;
  *   meets all requirements.
  */
 
-//#define WIDESCREEN
+#define WIDESCREEN
 #ifndef WIDESCREEN
 #  define WIDTH 800 //1440
 #  define HEIGHT 600 //1080
@@ -102,6 +102,9 @@ struct vulkan_renderer
     struct vulkan_texture *light_tex;
     VkFramebuffer *light_framebufs;
     VkRenderPass light_render_pass;
+
+    // Index of the current environment overlay texture (e.g. rain, snow, etc.)
+    i32 env_tex_index;
 };
 
 extern struct vulkan_renderer *g_vulkan;
@@ -126,5 +129,7 @@ i32 vulkan_texture_load(const char *);
 
 i32 vulkan_level_begin(void);
 i32 vulkan_level_end(void);
+
+i32 vulkan_update_sp2_descriptors(void);
 
 #endif

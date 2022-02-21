@@ -43,7 +43,7 @@ void entity_movetype(struct tagap_entity *e)
     }
 }
 
-static void 
+static void
 entity_movetype_walk(struct tagap_entity *e)
 {
     // Jumping
@@ -75,10 +75,38 @@ entity_movetype_walk(struct tagap_entity *e)
             e->jump_reset = true;
         }
     }
-    if (e->jump_timer >= 0.0f)
+    if (e->jump_timer >= 0.0f) e->jump_timer += DT;
+
+    // Belly sliding (not properly implemented)
+    static const f32 MAX_SLIDE_TIME = 1.2f, MIN_SLIDE_TIME = 1.2f;
+#if SLIDE_ENABLED
+    if (e->inputs.vert < 0.0f)
     {
-        e->jump_timer += DT;
+        if ((e->slide_timer < 0.0f || e->slide_timer > 0.0f) &&
+            e->collision.below)
+        {
+            // Reset timer to initiate slide
+            e->slide_timer = 0.0f;
+        }
+        else if (e->slide_timer > MAX_SLIDE_TIME)
+        {
+            // Keep sliding until limit
+            e->slide_timer = -1.0f;
+        }
     }
+    else if (e->slide_timer > MIN_SLIDE_TIME)
+    {
+        // Stop timer
+        if (e->collision.below)
+        {
+            e->slide_timer = -1.0f;
+        }
+    }
+    if (e->aim_angle > 90.0f)
+    {
+        e->slide_timer = -1.0f;
+    }
+#endif
 
     // Apply gravity
     if (e->jump_timer < 0.0f || e->collision.above)
@@ -110,11 +138,14 @@ entity_movetype_walk(struct tagap_entity *e)
     }
 
     // Move faster when walking in direction of facing
-    static const f32 FORWARD_SPEED = 1.4f, BACKWARD_SPEED = 1.2f;
+    static const f32 FORWARD_SPEED = 1.4f,
+                     BACKWARD_SPEED = 1.2f,
+                     SLIDE_SPEED = 3.2f;
     f32 facing_mul = lerpf(BACKWARD_SPEED,
         FORWARD_SPEED,
         ((f32)!e->flipped) == sign(e->inputs.horiz / 2.0f + 0.5f));
 
+    // Stop input when colliding with walls
     f32 col_x_mul = 1.0f;
     if (e->collision.left && e->inputs.horiz_smooth <= 0.0f)
     {
@@ -125,8 +156,22 @@ entity_movetype_walk(struct tagap_entity *e)
         col_x_mul = 0.0f;
     }
 
-    e->velo.x = e->inputs.horiz_smooth * e->info->move.speed * facing_mul *
-        col_x_mul;
+    if (e->slide_timer < 0.0f)
+    {
+        // Normal walking movement
+        e->velo.x = e->inputs.horiz_smooth * e->info->move.speed * facing_mul *
+            col_x_mul;
+    }
+    else
+    {
+        // Epic bellyslide
+        //LOG_DBUG("BELLYSLIDE");
+        e->velo.x = e->info->move.speed * SLIDE_SPEED *
+            ((1.0f - clamp01(e->slide_timer / MAX_SLIDE_TIME)) * 0.5f + 0.5f) *
+            ((f32)e->flipped * -2.0f + 1.0f) * col_x_mul;
+
+        e->slide_timer += DT;
+    }
 
     if (e->collision.below &&
         e->jump_timer < 0.0f)
@@ -146,7 +191,7 @@ entity_movetype_walk(struct tagap_entity *e)
 
     if (e->collision.below)
     {
-        e->bobbing_timer += e->velo.x * DT * 20.0f;
+        e->bobbing_timer += e->velo.x * DT * 20.0f * (f32)(e->slide_timer < 0.0f);
         e->bobbing_timer = fmodf(e->bobbing_timer, 2.0f * GLM_PI);
     }
     else
@@ -190,7 +235,7 @@ entity_movetype_walk(struct tagap_entity *e)
     }
 }
 
-static void 
+static void
 entity_movetype_float(struct tagap_entity *e)
 {
     e->velo.x = smooth_in(e->velo.x, e->inputs.horiz);

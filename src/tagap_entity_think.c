@@ -2,6 +2,7 @@
 #include "tagap.h"
 #include "tagap_entity.h"
 #include "tagap_entity_think.h"
+#include "renderer.h"
 
 static void entity_think_user(struct tagap_entity *);
 static void entity_think_missile(struct tagap_entity *);
@@ -23,7 +24,7 @@ entity_think(struct tagap_entity *e)
     }
 }
 
-static void 
+static void
 entity_think_user(struct tagap_entity *e)
 {
     // Calculate world point of cursor
@@ -63,7 +64,7 @@ entity_think_user(struct tagap_entity *e)
     else e->inputs.vert = 0.0f;
 
     e->inputs.fire = !!(g_state.m_state & SDL_BUTTON(1));
-    
+
     // Mouse scroll: weapon slot changes
     if (g_state.mouse_scroll > 0)
     {
@@ -110,7 +111,7 @@ entity_think_user(struct tagap_entity *e)
 #endif
 }
 
-static void 
+static void
 entity_think_missile(struct tagap_entity *e)
 {
     // Fixes gunentity glitches
@@ -123,7 +124,7 @@ entity_think_missile(struct tagap_entity *e)
     static const f32 MISSILE_SPEED_MUL = 1.5f;
     e->velo.x = cos(glm_rad(e->aim_angle)) * e->info->think.speed_mod *
         (e->flipped ? -1.0f : 1.0f) * MISSILE_SPEED_MUL;
-    e->velo.y = sin(glm_rad(e->aim_angle)) * e->info->think.speed_mod * 
+    e->velo.y = sin(glm_rad(e->aim_angle)) * e->info->think.speed_mod *
         MISSILE_SPEED_MUL;
 
     // Missile lifespan
@@ -134,4 +135,32 @@ entity_think_missile(struct tagap_entity *e)
         entity_die(e);
     }
     e->timer_tempmissile += DT;
+    f32 completion = clamp01(e->timer_tempmissile / missile_lifespan);
+
+    // Expand missile
+    if (e->info->stats[STAT_FX_EXPAND])
+    {
+        f32 new_scale = 1.0f + completion;
+        for (u32 i = 0; i < e->info->sprite_count; ++i)
+        {
+            e->sprites[i]->scale = new_scale * 2.0f;
+        }
+
+        // Expand light
+        if (e->r_light) e->r_light->scale = new_scale;
+    }
+
+    // Fade missile
+    if (e->info->stats[STAT_FX_FADE])
+    {
+        f32 new_alpha = 1.0f - completion;
+        for (u32 i = 0; i < e->info->sprite_count; ++i)
+        {
+            // Modify the renderable opacity
+            e->sprites[i]->extra_shading.w = new_alpha;
+        }
+
+        // Fade light
+        if (e->r_light) e->r_light->light_colour.w = new_alpha;
+    }
 }
