@@ -3,6 +3,7 @@
 #include "tagap.h"
 #include "tagap_entity.h"
 #include "tagap_linedef.h"
+#include "renderer.h"
 
 void
 collision_check(struct tagap_entity *e, struct collision_result *c)
@@ -13,8 +14,19 @@ collision_check(struct tagap_entity *e, struct collision_result *c)
     {
         struct tagap_linedef *l = &g_map->linedefs[i];
 
+        // These radii are a bit dodgey, but seems to work alright for now
         f32 max_radius = max(e->info->offsets[OFFSET_SIZE].x,
             e->info->offsets[OFFSET_SIZE].y);
+        f32 radius_y = 0.0f;
+        if (e->info->offsets[OFFSET_SIZE].y > 0.0f)
+        {
+            // Note we deliberately use X here (works much better for player)
+            radius_y = e->info->offsets[OFFSET_SIZE].x;
+        }
+        else if (e->info->sprite_count)
+        {
+            radius_y = g_vulkan->textures[e->sprites[0]->tex].h;
+        }
 
         vec2s leftmost;
         vec2s rightmost;
@@ -47,7 +59,7 @@ collision_check(struct tagap_entity *e, struct collision_result *c)
                     l->style == LINEDEF_STYLE_PLATE_FLOOR) &&
                 !c->below &&
                 e->velo.y <= 0.0f &&
-                e->position.y - e->info->offsets[OFFSET_SIZE].x <= y_line &&
+                e->position.y - radius_y <= y_line &&
                 e->position.y >= y_line)
             {
                 c->below = true;

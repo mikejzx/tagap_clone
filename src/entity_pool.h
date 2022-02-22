@@ -11,14 +11,14 @@ struct tagap_entity_info;
  * example being weapon projectiles.
  *
  * TODO: instanced rendering for these sorts of things, e.g. for flames. Should
- *       be fairly straightforward once a particle system is implemented (which 
+ *       be fairly straightforward once a particle system is implemented (which
  *       should definitely use batch rendering/instancing).
  */
 
 enum entity_pool_id
 {
     POOL_ID_UNKNOWN = 0,
-    
+
     // NOTE: trace attacks (bullets, beams, etc.) are not in here as we don't
     //       create them as "entities" per se, but rather as general
     //       renderables?
@@ -40,6 +40,6 @@ void entity_pool_deinit(void);
 void entity_pool_update(void);
 struct tagap_entity *entity_pool_get(struct tagap_entity_info *);
 struct tagap_entity *entity_pool_get_by_id(enum entity_pool_id);
-void entity_pool_return(struct tagap_entity *);
+bool entity_pool_return(struct tagap_entity *);
 
 #endif

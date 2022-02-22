@@ -16,6 +16,7 @@ struct renderable;
 
 #define LEVEL_TITLE_MAX 32
 #define LEVEL_DESC_MAX 64
+#define TEXCLONE_NAME_MAX 256
 
 // Hard-coded constants for now
 #define LEVEL_MAX_LINEDEFS 512
@@ -27,6 +28,7 @@ struct renderable;
 #define GAME_ENTITY_INFO_LIMIT 1024
 #define GAME_THEME_INFO_LIMIT 32
 #define GAME_SPRITE_INFO_LIMIT 1024
+#define GAME_MAX_TEXCLONES 32
 
 struct state_level
 {
@@ -76,6 +78,9 @@ struct state_level
 
         // Current depth amount in the level
         u32 current_depth, current_entity_depth;
+
+        // Player state
+        struct tagap_entity *player;
     } map;
 
     // Global entity definitions (do not need to be in the level).  These are
@@ -95,9 +100,15 @@ struct state_level
     struct tagap_sprite_info *sprite_infos;
     i32 sprite_info_count;
 
-    // Player state
-    // (unused)
-    struct player player;
+    // List of cloned textures
+    struct tagap_texclone
+    {
+        char name[TEXCLONE_NAME_MAX];
+        char target[TEXCLONE_NAME_MAX];
+        bool bright;
+        i32 index;
+    } texclones[GAME_MAX_TEXCLONES];
+    u32 texclone_count;
 };
 
 extern struct state_level *g_level;

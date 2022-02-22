@@ -7,7 +7,7 @@ static struct entity_pool
 {
     // Name of the entity in this pool
     char name[ENTITY_NAME_MAX];
-    
+
     // Max size and number of entities in the pool
     size_t limit;
 
@@ -25,7 +25,7 @@ static struct entity_pool
 };
 
 /* Initialise the entity pools */
-void 
+void
 entity_pool_init(void)
 {
     // Create the pools
@@ -127,9 +127,14 @@ entity_pool_get(struct tagap_entity_info *e)
 }
 
 /* Return an entity to the pool */
-void 
+bool
 entity_pool_return(struct tagap_entity *e)
 {
-    if (e->info->pool_id <= 0 || e->info->pool_id >= POOL_ID_COUNT) return;
+    if (e->info->pool_id <= 0 || e->info->pool_id >= POOL_ID_COUNT)
+    {
+        return false;
+    }
+
     entity_set_inactive_hidden(e, true);
+    return true;
 }

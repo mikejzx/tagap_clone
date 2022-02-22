@@ -112,7 +112,6 @@ particles_init(void)
     static const VkFenceCreateInfo fence_info =
     {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        // Need to start signalled so that vkWaitForFences doesn't wait forever
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
     if (vkCreateFence(g_vulkan->d, &fence_info, NULL,

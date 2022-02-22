@@ -6,6 +6,7 @@
 
 static void entity_think_user(struct tagap_entity *);
 static void entity_think_missile(struct tagap_entity *);
+static void entity_think_item(struct tagap_entity *);
 
 void
 entity_think(struct tagap_entity *e)
@@ -17,6 +18,9 @@ entity_think(struct tagap_entity *e)
 
     // Entity is a projectile
     case THINK_AI_MISSILE: entity_think_missile(e); break;
+
+    // Entity is an item
+    case THINK_AI_ITEM: entity_think_item(e); break;
 
     // Static entity
     default:
@@ -162,5 +166,24 @@ entity_think_missile(struct tagap_entity *e)
 
         // Fade light
         if (e->fx.r_light) e->fx.r_light->light_colour.w = new_alpha;
+    }
+}
+
+static void
+entity_think_item(struct tagap_entity *e)
+{
+    // Check if we come in proximity to player
+    static const f32 ITEM_RADIUS = 32.0f;
+    if (glms_vec2_distance2(e->position, g_map->player->position) <
+        ITEM_RADIUS * ITEM_RADIUS)
+    {
+        // Copy the ammunition from item to player's store
+        for (u32 w = 0; w < WEAPON_SLOT_COUNT; ++w)
+        {
+            g_map->player->weapons[w].ammo += e->weapons[w].ammo;
+        }
+
+        // Destroy the pickup
+        entity_die(e);
     }
 }

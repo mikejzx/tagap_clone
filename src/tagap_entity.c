@@ -42,9 +42,15 @@ entity_spawn(struct tagap_entity *e)
         }
 
         // Create the sprite renderable
-        e->sprites[s] = renderer_get_renderable_quad(
-            SHADER_DEFAULT_NO_ZBUFFER,
-            DEPTH_ENTITIES + g_map->current_entity_depth / 10.0f);
+        struct renderable_quad_info quad =
+        {
+            .shader = SHADER_DEFAULT_NO_ZBUFFER,
+            .centre_x = true,
+            .centre_y = true,
+            .depth = DEPTH_ENTITIES + g_map->current_entity_depth / 10.0f,
+            .make_bounds = true,
+        };
+        e->sprites[s] = renderer_get_renderable_quad(&quad);
         struct renderable *r = e->sprites[s];
 
         r->tex = spr->info->frames[spr->vars[SPRITEVAR_KEEPFRAME]].tex;
@@ -92,21 +98,30 @@ entity_spawn(struct tagap_entity *e)
         ++g_map->current_entity_depth;
     }
 
-    // Temporary: give user a bunch of ammo to start with (to test different
-    // weapons)
-#if DEBUG
+    // Write the initial ammo amount
+    for (u32 w = 0; w < WEAPON_SLOT_COUNT; ++w)
+    {
+        e->weapons[w].ammo = e->info->ammo[w];
+    }
+
     if (e->info->think.mode == THINK_AI_USER)
     {
+        // Set this entity as the player
+        g_map->player = e;
+
         e->weapons[0].ammo = 15;
+#if 0 //DEBUG
+        // Temporary: give user a bunch of ammo to start with (to test
+        // different weapons)
         e->weapons[1].ammo = 300;
         e->weapons[2].ammo = 400;
         e->weapons[3].ammo = 700;
         e->weapons[4].ammo = 500;
         e->weapons[5].ammo = 500;
         e->weapons[6].ammo = 500;
+#endif
         //e->weapons[0].has_akimbo = true;
     }
-#endif
 
     // Create non-RENDERFIRST gun entities
     create_gunent(e, false);
@@ -243,7 +258,7 @@ entity_update(struct tagap_entity *e)
     f32 flip_mul = (f32)e->flipped * -2.0f + 1.0f;
 
     // TODO: only enable bobbing if entity during load detects that sprites
-    // need bobbing
+    //       need bobbing?
     f32 bob_sin = 0.0f;
     if (e->info->sprite_count)
     {
@@ -303,6 +318,13 @@ entity_update(struct tagap_entity *e)
             f32 tangent = glm_deg(atan(e->collision.floor_gradient));
             tangent *= flip_mul;
             sprite_rot_offset += tangent;
+        }
+
+        // Apply Y-wise float effect (used for items)
+        if (e->info->stats[STAT_FX_FLOAT])
+        {
+            static const f32 FLOATING_BOB_AMOUNT = 8.0f;
+            sprite_offset.y = bob_sin * FLOATING_BOB_AMOUNT + 16.0f;
         }
 
 #if SLIDE_ENABLED
@@ -453,11 +475,15 @@ entity_free(struct tagap_entity *e)
 void
 entity_die(struct tagap_entity *e)
 {
-    // Die effects/gibs (e.g. explosion, etc.)
+    // Die effects/gibs (e.g. explosion, etc.) and SFX
     // ...
 
     // Move missile back into pool if it is pooled
-    entity_pool_return(e);
+    if (!entity_pool_return(e))
+    {
+        // Wasn't in pool, so just deactivate for now
+        entity_set_inactive_hidden(e, true);
+    }
 }
 
 void

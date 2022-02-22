@@ -495,6 +495,20 @@ tagap_script_run_cmd_in_state(
         e->active = !ss->tok[4].b;
     } break;
 
+    // Set entity ammo
+    case ATOM_AMMO:
+    {
+        if (ss->tok[0].i < 0 || ss->tok[0].i >= WEAPON_SLOT_COUNT)
+        {
+            SCRIPT_ERROR("AMMO: invalid slot %d", ss->tok[0].i);
+            return -1;
+        }
+
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+        e->ammo[ss->tok[0].i] = ss->tok[1].i;
+    } break;
+
     // Clone entity info
     case ATOM_CLONE:
     {
@@ -775,6 +789,39 @@ tagap_script_run_cmd_in_state(
             .target_index = ss->tok[4].i,
             .id = ss->tok[5].i,
         };
+    } break;
+
+    // Sets a texture as a clone of another
+    case ATOM_TEXCLONE:
+    {
+        if (g_level->texclone_count + 1 >= GAME_MAX_TEXCLONES)
+        {
+            SCRIPT_ERROR("TEXCLONE: limit (%d) exceeded", GAME_MAX_TEXCLONES);
+            return -1;
+        }
+
+        struct tagap_texclone *t =
+            &g_level->texclones[g_level->texclone_count++];
+
+        const char *SUFFIX = ".tga";
+
+        // Copy a fake path to the cloned texture
+        strcpy(t->name, TAGAP_TEXTURES_DIR);
+        strcat(t->name, "/");
+        strcat(t->name, ss->tok[0].str);
+        strcat(t->name, SUFFIX);
+
+        // Copy path to the real texture
+        strcpy(t->target, TAGAP_TEXTURES_DIR);
+        strcat(t->target, "/");
+        strcat(t->target, ss->tok[1].str);
+        strcat(t->target, SUFFIX);
+
+        t->bright = ss->tok[2].b;
+        t->index = 0; // Gets set when this texture is requested
+
+        //LOG_DBUG("texclone: %s --> %s, %d",
+        //  ss->tok[0].str, ss->tok[1].str, !!ss->tok[2].b);
     } break;
 
     default: break;

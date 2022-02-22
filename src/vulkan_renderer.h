@@ -33,6 +33,7 @@ struct shader;
 #endif
 
 #define MAX_TEXTURES 128
+#define TEXTURE_NAME_MAX 256
 // We reserve two textures at the moment
 //  0: default 1x1 white texture
 #define RESERVED_TEXTURE_COUNT 1
@@ -82,7 +83,7 @@ struct vulkan_renderer
         VkImage image;
         VmaAllocation alloc;
         VkImageView view;
-        char name[256];
+        char name[TEXTURE_NAME_MAX];
         u32 w, h;
         VkFormat format;
     } textures[MAX_TEXTURES];

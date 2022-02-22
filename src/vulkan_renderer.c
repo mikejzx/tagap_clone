@@ -2180,6 +2180,22 @@ vulkan_texture_load(const char *path)
         }
     }
 
+    // Check if the texture is instead a clone of something
+    for (u32 c = 0; c < g_level->texclone_count; ++c)
+    {
+        struct tagap_texclone *clone = &g_level->texclones[c];
+        if (strcmp(clone->name, path) == 0)
+        {
+            // Read the cloned texture
+            if (!clone->index)
+            {
+                clone->index = vulkan_texture_load(clone->target);
+            }
+            LOG_DBUG("[texture] read cloned texture %s", clone->target);
+            return clone->index;
+        }
+    }
+
     // Load texture data
     i32 w, h, ch;
     stbi_uc *pixels = stbi_load(path,
@@ -2187,7 +2203,7 @@ vulkan_texture_load(const char *path)
     VkDeviceSize size = w * h * 4;
     if (!pixels)
     {
-        LOG_ERROR("[stb_image] failed to load texture '%s'",
+        LOG_ERROR("[texture] failed to load texture '%s'",
             path);
         return -1;
     }

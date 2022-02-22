@@ -74,6 +74,15 @@ struct renderable
     } bounds;
 };
 
+struct renderable_quad_info
+{
+    enum shader_type shader;
+    f32 w, h;
+    bool centre_x, centre_y;
+    f32 depth;
+    bool make_bounds;
+};
+
 struct renderer
 {
     // Vertex buffers we want to render
@@ -91,11 +100,7 @@ void renderer_render(vec3s *);
 void renderer_deinit(void);
 
 struct renderable *renderer_get_renderable(enum shader_type);
-struct renderable *renderer_get_renderable_quad(enum shader_type, f32);
-struct renderable *renderer_get_renderable_quad_dim(enum shader_type,
-    f32, f32, bool, f32);
-struct renderable *renderer_get_renderable_quad_dim_explicit(
-    enum shader_type, f32, f32, bool, bool, f32, bool);
+struct renderable *renderer_get_renderable_quad(struct renderable_quad_info *);
 void renderer_add_polygon(struct tagap_polygon *);
 void renderer_add_layer(struct tagap_layer *, i32);
 void renderer_add_linedefs(struct tagap_linedef *, size_t);

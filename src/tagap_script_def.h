@@ -48,6 +48,7 @@ enum tagap_script_atom_id
     ATOM_ENTITY_START,
     ATOM_ENTITY_END,
     ATOM_ENTITY_SET,
+    ATOM_AMMO,
     ATOM_CLONE,
     ATOM_SPRITE,
     ATOM_SPRITEVAR,
@@ -61,6 +62,7 @@ enum tagap_script_atom_id
     ATOM_WEAPON,
     ATOM_LAYER,
     ATOM_TRIGGER,
+    ATOM_TEXCLONE,
 
     // (internal) Number of atoms we implement
     _ATOM_COUNT
@@ -258,6 +260,21 @@ TAGAP_SCRIPT_COMMANDS[] =
             { .type = TSCRIPT_TOKEN_BOOL }
         }
     },
+    // Set ammo for entity weapon slot
+    [ATOM_AMMO] =
+    {
+        .name = "AMMO",
+        .token_count = 2,
+        .tokens =
+        {
+            // #1: weapon slot
+            { .type = TSCRIPT_TOKEN_INT },
+            // #2: ammo amount
+            { .type = TSCRIPT_TOKEN_INT },
+        },
+        .requires_mode = true,
+        .required_mode = TAGAP_PARSE_ENTITY,
+    },
     // Copy entity info
     [ATOM_CLONE] =
     {
@@ -355,8 +372,8 @@ TAGAP_SCRIPT_COMMANDS[] =
                 .lookup_func = lookup_tagap_think_attack
             },
             // #4: attack speed
-            { 
-                .type = TSCRIPT_TOKEN_FLOAT, 
+            {
+                .type = TSCRIPT_TOKEN_FLOAT,
                 // Sometimes not specified (defaults to 0)
                 .optional = true,
             },
@@ -379,8 +396,8 @@ TAGAP_SCRIPT_COMMANDS[] =
             // #2: X offset
             { .type = TSCRIPT_TOKEN_INT, },
             // #3: Y offset
-            { 
-                .type = TSCRIPT_TOKEN_INT, 
+            {
+                .type = TSCRIPT_TOKEN_INT,
 
                 // Some scripts don't include the second value for some reason
                 .optional = true,
@@ -488,7 +505,7 @@ TAGAP_SCRIPT_COMMANDS[] =
     {
         .name = "LAYER",
         .token_count = 6,
-        .tokens = 
+        .tokens =
         {
             // #1: scroll speed multiplier
             { .type = TSCRIPT_TOKEN_FLOAT },
@@ -520,20 +537,35 @@ TAGAP_SCRIPT_COMMANDS[] =
             // #5: target index reference or modifer value
             { .type = TSCRIPT_TOKEN_INT },
             // #6: trigger name
-            { 
+            {
                 .type = TSCRIPT_TOKEN_LOOKUP,
                 .lookup_func = lookup_tagap_trigger
             },
             // #7: trigger string
             { .type = TSCRIPT_TOKEN_STRING, .length = 32 },
             // #8: link class
-            { 
+            {
                 .type = TSCRIPT_TOKEN_STRING, .length = 32,
-                //.type = TSCRIPT_TOKEN_LOOKUP, 
+                //.type = TSCRIPT_TOKEN_LOOKUP,
                 //.lookup_func = lookup_tagap_link_class
             },
             // #9: additional variable value
             { .type = TSCRIPT_TOKEN_INT, },
+        },
+    },
+    // Defines a texture that is a clone of another
+    [ATOM_TEXCLONE] =
+    {
+        .name = "TEXCLONE",
+        .token_count = 3,
+        .tokens =
+        {
+            // #1: name of clone
+            { .type = TSCRIPT_TOKEN_STRING, .length = TEXCLONE_NAME_MAX },
+            // #2: name of texture to clone
+            { .type = TSCRIPT_TOKEN_STRING, .length = TEXCLONE_NAME_MAX },
+            // #3: bright flag toggle
+            { .type = TSCRIPT_TOKEN_BOOL },
         },
     },
 };

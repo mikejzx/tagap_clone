@@ -553,10 +553,14 @@ renderer_add_trigger(struct tagap_trigger *t)
             h = g_vulkan->textures[tex_index].h;
 
         // Create the quad
-        struct renderable *r = renderer_get_renderable_quad_dim(
-            SHADER_DEFAULT_NO_ZBUFFER,
-            w, h,
-            false, DEPTH_TRIGGERS + l->depth);
+        struct renderable_quad_info quad =
+        {
+            .shader = SHADER_DEFAULT_NO_ZBUFFER,
+            .w = w,
+            .h = h,
+            .depth = DEPTH_TRIGGERS + l->depth ,
+        };
+        struct renderable *r = renderer_get_renderable_quad(&quad);
         r->tex = tex_index;
         r->pos.x = t->corner_tl.x;
         r->pos.y = -t->corner_br.y;
@@ -572,82 +576,78 @@ renderer_add_trigger(struct tagap_trigger *t)
 }
 
 struct renderable *
-renderer_get_renderable_quad_dim_explicit(
-    enum shader_type type,
-    f32 w,
-    f32 h,
-    bool centre_x,
-    bool centre_y,
-    f32 depth,
-    bool make_bounds)
+renderer_get_renderable_quad(struct renderable_quad_info *i)
 {
-    struct renderable *r = renderer_get_renderable(type);
+    struct renderable *r = renderer_get_renderable(i->shader);
     if (!r) return NULL;
+
+    if (i->w == 0.0f) i->w = 1.0f;
+    if (i->h == 0.0f) i->h = 1.0f;
 
     struct vertex vertices[4];
 
     // Top left
     vertices[0] = (struct vertex)
     {
-        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .pos      = (vec3s) { 0.0f, 0.0f, i->depth },
         .texcoord = (vec2s) { 0.0f, 0.0f, },
     };
     // Top right
     vertices[1] = (struct vertex)
     {
-        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .pos      = (vec3s) { 0.0f, 0.0f, i->depth },
         .texcoord = (vec2s) { 1.0f, 0.0f, },
     };
     // Bottom right
     vertices[2] = (struct vertex)
     {
-        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .pos      = (vec3s) { 0.0f, 0.0f, i->depth },
         .texcoord = (vec2s) { 1.0f, 1.0f, },
     };
     // Bottom left
     vertices[3] = (struct vertex)
     {
-        .pos      = (vec3s) { 0.0f, 0.0f, depth },
+        .pos      = (vec3s) { 0.0f, 0.0f, i->depth },
         .texcoord = (vec2s) { 0.0f, 1.0f, },
     };
 
     vec2s bounds_min = GLMS_VEC2_ZERO, bounds_max = GLMS_VEC2_ZERO;
 
-    if (centre_x)
+    if (i->centre_x)
     {
-        vertices[0].pos.x = -w / 2.0f;
-        vertices[1].pos.x = w / 2.0f;
-        vertices[2].pos.x = w / 2.0f;
-        vertices[3].pos.x = -w / 2.0f;
-        bounds_min.x = -w / 2.0f;
-        bounds_max.x = w / 2.0f;
+        vertices[0].pos.x = -i->w / 2.0f;
+        vertices[1].pos.x = i->w / 2.0f;
+        vertices[2].pos.x = i->w / 2.0f;
+        vertices[3].pos.x = -i->w / 2.0f;
+        bounds_min.x = -i->w / 2.0f;
+        bounds_max.x = i->w / 2.0f;
     }
     else
     {
         vertices[0].pos.x = 0.0f;
-        vertices[1].pos.x = w;
-        vertices[2].pos.x = w;
+        vertices[1].pos.x = i->w;
+        vertices[2].pos.x = i->w;
         vertices[3].pos.x = 0.0f;
         bounds_min.x = 0.0f;
-        bounds_max.x = w;
+        bounds_max.x = i->w;
     }
-    if (centre_y)
+    if (i->centre_y)
     {
-        vertices[0].pos.y = h / 2.0f;
-        vertices[1].pos.y = h / 2.0f;
-        vertices[2].pos.y = -h / 2.0f;
-        vertices[3].pos.y = -h / 2.0f;
-        bounds_min.y = -h / 2.0f;
-        bounds_max.y = h / 2.0f;
+        vertices[0].pos.y = i->h / 2.0f;
+        vertices[1].pos.y = i->h / 2.0f;
+        vertices[2].pos.y = -i->h / 2.0f;
+        vertices[3].pos.y = -i->h / 2.0f;
+        bounds_min.y = -i->h / 2.0f;
+        bounds_max.y = i->h / 2.0f;
     }
     else
     {
-        vertices[0].pos.y = h;
-        vertices[1].pos.y = h;
+        vertices[0].pos.y = i->h;
+        vertices[1].pos.y = i->h;
         vertices[2].pos.y = 0.0f;
         vertices[3].pos.y = 0.0f;
         bounds_min.y = 0.0f;
-        bounds_max.y = h;
+        bounds_max.y = i->h;
     }
     static const IB_TYPE indices[3 * 4] =
     {
@@ -658,32 +658,13 @@ renderer_get_renderable_quad_dim_explicit(
     vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
     ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
 
-    if (make_bounds)
+    if (i->make_bounds)
     {
         r->bounds.min = bounds_min;
         r->bounds.max = bounds_max;
     }
 
     return r;
-}
-
-struct renderable *
-renderer_get_renderable_quad_dim(
-    enum shader_type type,
-    f32 w,
-    f32 h,
-    bool centre,
-    f32 depth)
-{
-    return renderer_get_renderable_quad_dim_explicit(type,
-        w, h, centre, centre, depth, false);
-}
-
-struct renderable *
-renderer_get_renderable_quad(enum shader_type type, f32 depth)
-{
-    return renderer_get_renderable_quad_dim(type,
-        1.0f, 1.0f, true, depth);
 }
 
 /*

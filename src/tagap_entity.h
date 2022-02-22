@@ -32,6 +32,7 @@ enum tagap_entity_stat_id
     STAT_FX_DISABLE,
     STAT_FX_EXPAND,
     STAT_FX_FADE,
+    STAT_FX_FLOAT,
     STAT_FX_MUZZLE,
     STAT_FX_OFFSXFACE,
     STAT_FX_PUSHUP,
@@ -56,6 +57,7 @@ static const char *STAT_NAMES[] =
     [STAT_FX_DISABLE]     = "FX_DISABLE",
     [STAT_FX_EXPAND]      = "FX_EXPAND",
     [STAT_FX_FADE]        = "FX_FADE",
+    [STAT_FX_FLOAT]       = "FX_FLOAT",
     [STAT_FX_MUZZLE]      = "FX_MUZZLE",
     [STAT_FX_OFFSXFACE]   = "FX_OFFSXFACE",
     [STAT_FX_PUSHUP]      = "FX_PUSHUP",
@@ -132,6 +134,9 @@ struct tagap_entity_info
     // GUNENTITY for weapon entity
     struct tagap_entity_info *gun_entity;
 
+    // Entity ammo amounts (e.g. amount picked up by entity)
+    i32 ammo[WEAPON_SLOT_COUNT];
+
     // Whether this entity has a weapon
     bool has_weapon;
 
@@ -177,6 +182,7 @@ entity_info_clone(
     memcpy(&a->move, &b->move, sizeof(struct tagap_entity_movetype));
     memcpy(a->offsets, b->offsets, ENTITY_OFFSET_COUNT * sizeof(vec2s));
     a->gun_entity = b->gun_entity;
+    memcpy(a->ammo, b->ammo, sizeof(i32) * WEAPON_SLOT_COUNT);
     a->has_weapon = b->has_weapon;
     memcpy(&a->light, &b->light, sizeof(struct tagap_entity_light));
     memcpy(&a->flashlight, &b->flashlight,

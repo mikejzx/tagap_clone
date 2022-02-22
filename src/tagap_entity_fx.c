@@ -245,14 +245,16 @@ entity_fx_init_light(struct tagap_entity *e)
     }
 
     // Create the light quad
-    fx->r_light = renderer_get_renderable_quad_dim_explicit(
-        SHADER_LIGHT,
-        g_vulkan->textures[tex].w * e->info->light.radius * 2.0f,
-        g_vulkan->textures[tex].h * e->info->light.radius * 2.0f,
-        true,
-        true,
-        0.0f,
-        true);
+    struct renderable_quad_info quad =
+    {
+        .shader = SHADER_LIGHT,
+        .w = g_vulkan->textures[tex].w * e->info->light.radius * 2.0f,
+        .h = g_vulkan->textures[tex].h * e->info->light.radius * 2.0f,
+        .centre_x = true,
+        .centre_y = true,
+        .make_bounds = true,
+    };
+    fx->r_light = renderer_get_renderable_quad(&quad);
     if (!fx->r_light)
     {
         LOG_ERROR("[tagap_entity_fx] failed to add light");
@@ -291,14 +293,16 @@ entity_fx_init_muzzle(struct tagap_entity *e)
     struct tagap_entity_fx *const fx = &e->fx;
 
     // Create muzzle flash light
-    fx->r_muzzle = renderer_get_renderable_quad_dim_explicit(
-        SHADER_LIGHT,
-        g_vulkan->textures[tex].w * MUZZLE_BASE_SIZE_MUL,
-        g_vulkan->textures[tex].h * MUZZLE_BASE_SIZE_MUL,
-        true,
-        true,
-        0.0f,
-        true);
+    struct renderable_quad_info quad =
+    {
+        .shader = SHADER_LIGHT,
+        .w = g_vulkan->textures[tex].w * MUZZLE_BASE_SIZE_MUL,
+        .h = g_vulkan->textures[tex].h * MUZZLE_BASE_SIZE_MUL,
+        .centre_x = true,
+        .centre_y = true,
+        .make_bounds = true,
+    };
+    fx->r_muzzle = renderer_get_renderable_quad(&quad);
     if (!fx->r_muzzle)
     {
         LOG_ERROR("[tagap_entity_fx] failed to add muzzle flash light");
@@ -338,14 +342,18 @@ entity_fx_init_flashlight(struct tagap_entity *e)
     }
 
     /* Create the flashlight quad */
-    fx->r_flashlight = renderer_get_renderable_quad_dim_explicit(
-        SHADER_LIGHT,
-        g_vulkan->textures[tex].w * e->info->flashlight.beam_length * 2.0f,
-        g_vulkan->textures[tex].h * e->info->flashlight.halo_radius * 0.65f,
-        false,
-        true,
-        0.0f,
-        true);
+    struct renderable_quad_info quad =
+    {
+        .shader = SHADER_LIGHT,
+        .w = g_vulkan->textures[tex].w *
+            e->info->flashlight.beam_length * 2.0f,
+        .h = g_vulkan->textures[tex].h *
+            e->info->flashlight.halo_radius * 0.65f,
+        .centre_x = false,
+        .centre_y = true,
+        .make_bounds = true,
+    };
+    fx->r_flashlight = renderer_get_renderable_quad(&quad);
     if (!fx->r_flashlight)
     {
         LOG_ERROR("[tagap_entity_fx] failed to add flashlight");

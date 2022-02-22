@@ -112,13 +112,13 @@ entity_movetype_walk(struct tagap_entity *e)
     if (e->jump_timer < 0.0f || e->collision.above)
     {
         static const f32 GRAVITY_DEFAULT = -3.2f;
-        // Not jumping; normal gravity
         if (e->velo.y > GRAVITY_DEFAULT && !e->collision.above)
         {
             e->velo.y += 10.0f * GRAVITY_DEFAULT * DT;
         }
         else
         {
+            // Not jumping; normal gravity
             e->velo.y = GRAVITY_DEFAULT;
         }
         e->velo.y *= (f32)!e->collision.below;
@@ -189,49 +189,61 @@ entity_movetype_walk(struct tagap_entity *e)
         e->position.y += e->velo.y * DT * 60.0f;
     }
 
-    if (e->collision.below)
+    // Determine how to use the bobbing timer
+    if (!e->info->stats[STAT_FX_FLOAT])
     {
-        e->bobbing_timer += e->velo.x * DT * 20.0f * (f32)(e->slide_timer < 0.0f);
-        e->bobbing_timer = fmodf(e->bobbing_timer, 2.0f * GLM_PI);
-    }
-    else
-    {
-        // This is a bit tricky; this is to move the player's leg 'forward'
-        // when they are in mid-air.  The fmodf in the above block clamps
-        // the angle from 0 to 2pi radians.  We need the angle to be at
-        // pi/2 rad (90 deg) for the desired effect, and adjust the bobbing
-        // timer as such to get there
-        if (e->bobbing_timer > GLM_PI_2)
+        // Bobbing for actual walking things
+        if (e->collision.below)
         {
-            if (e->bobbing_timer > GLM_PI)
+            e->bobbing_timer += e->velo.x * DT * 20.0f *
+                (f32)(e->slide_timer < 0.0f);
+            e->bobbing_timer = fmodf(e->bobbing_timer, 2.0f * GLM_PI);
+        }
+        else
+        {
+            // This is a bit tricky; this is to move the player's leg 'forward'
+            // when they are in mid-air.  The fmodf in the above block clamps
+            // the angle from 0 to 2pi radians.  We need the angle to be at
+            // pi/2 rad (90 deg) for the desired effect, and adjust the bobbing
+            // timer as such to get there
+            if (e->bobbing_timer > GLM_PI_2)
+            {
+                if (e->bobbing_timer > GLM_PI)
+                {
+                    // Send bob timer forwards to get to 90 degrees
+                    e->bobbing_timer = clamp(
+                        e->bobbing_timer + DT * 10.0f,
+                        GLM_PI_2,
+                        GLM_PI_2 + GLM_PI * 2.0f);
+                }
+                else
+                {
+                    // Send bob timer backwards to get to 90 degrees
+                    e->bobbing_timer = clamp(
+                        e->bobbing_timer - DT * 10.0f,
+                        GLM_PI_2,
+                        GLM_PI * 2.0f);
+                }
+            }
+            else if (e->bobbing_timer < GLM_PI_2)
             {
                 // Send bob timer forwards to get to 90 degrees
                 e->bobbing_timer = clamp(
                     e->bobbing_timer + DT * 10.0f,
-                    GLM_PI_2,
-                    GLM_PI_2 + GLM_PI * 2.0f);
+                    0.0f,
+                    GLM_PI_2);
             }
             else
             {
-                // Send bob timer backwards to get to 90 degrees
-                e->bobbing_timer = clamp(
-                    e->bobbing_timer - DT * 10.0f,
-                    GLM_PI_2,
-                    GLM_PI * 2.0f);
+                e->bobbing_timer = GLM_PI_2;
             }
         }
-        else if (e->bobbing_timer < GLM_PI_2)
-        {
-            // Send bob timer forwards to get to 90 degrees
-            e->bobbing_timer = clamp(
-                e->bobbing_timer + DT * 10.0f,
-                0.0f,
-                GLM_PI_2);
-        }
-        else
-        {
-            e->bobbing_timer = GLM_PI_2;
-        }
+    }
+    else
+    {
+        // Use the bobbing timer for floating effect
+        static const f32 FLOATING_BOB_SPEED = 5.0f;
+        e->bobbing_timer += DT * FLOATING_BOB_SPEED;
     }
 }
 
