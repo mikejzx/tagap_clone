@@ -91,11 +91,42 @@ particles_init(void)
         LOG_ERROR("[particle] failed to create staging buffer");
         return;
     }
+
+    // Allocate command buffer for staging buffer-->vertex buffer copies on
+    // particle updates.  This should fix the massive particle slowdowns (500+
+    // FPS drops) we were having.
+    const VkCommandBufferAllocateInfo cmdbuf_alloc_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = g_vulkan->cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    if (vkAllocateCommandBuffers(g_vulkan->d, &cmdbuf_alloc_info,
+        &g_parts->cmdbuf) != VK_SUCCESS)
+    {
+        LOG_ERROR("[particle] failed to allocate command buffer");
+        return;
+    }
+
+    static const VkFenceCreateInfo fence_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        // Need to start signalled so that vkWaitForFences doesn't wait forever
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+    if (vkCreateFence(g_vulkan->d, &fence_info, NULL,
+        &g_parts->fence) != VK_SUCCESS)
+    {
+        LOG_ERROR("[particle] failed to create buffer-copy fence!");
+        return;
+    }
 }
 
 void
 particles_deinit(void)
 {
+    vkDestroyFence(g_vulkan->d, g_parts->fence, NULL);
     vmaDestroyBuffer(g_vulkan->vma,
         g_parts->staging_buf, g_parts->staging_buf_alloc);
     free(g_parts->pool);
@@ -176,7 +207,9 @@ particles_update(void)
     {
         return;
     }
-    if (vulkan_copy_buffer(
+    if (vulkan_copy_buffer_using_cmdbuffer(
+        g_parts->cmdbuf,
+        g_parts->fence,
         g_parts->staging_buf,
         g_parts->r->vb.vk_buffer,
         (size_t)(

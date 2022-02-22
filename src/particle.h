@@ -103,6 +103,10 @@ struct particle_system
     VkBuffer staging_buf;
     VmaAllocation staging_buf_alloc;
 
+    // Command buffer for copy operation
+    VkCommandBuffer cmdbuf;
+    VkFence fence;
+
     // List of loaded texture indices
     i32 tex_indices[_PARTICLE_COUNT];
 };

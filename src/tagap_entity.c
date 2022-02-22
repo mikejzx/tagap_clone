@@ -6,14 +6,10 @@
 #include "vulkan_renderer.h"
 #include "state_level.h"
 #include "entity_pool.h"
-#include "particle_emitter.h"
 
 #define KICK_TIMER_MAX (0.1f)
 #define KICK_AMOUNT (17.0f)
 #define PUSHUP_MAX_ANGLE (5.0f)
-#define MUZZLE_BASE_SIZE_MUL (1.6f)
-#define MUZZLE_INTENSITY (30.0f)
-#define MUZZLE_FLASH_SPEED (12.5f)
 
 static void entity_spawn_missile(struct tagap_entity *,
     struct tagap_entity_info *);
@@ -124,170 +120,10 @@ entity_spawn(struct tagap_entity *e)
         {
             e->weapons[i].reload_timer = -1.0f;
         }
-
-        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_light.tga");
-        if (tex <= 0)
-        {
-            LOG_ERROR("[tagap_entity] failed to add muzzle (no texture)");
-            return;
-        }
-
-        // Create muzzle flash light
-        e->r_muzzle = renderer_get_renderable_quad_dim_explicit(
-            SHADER_LIGHT,
-            g_vulkan->textures[tex].w * MUZZLE_BASE_SIZE_MUL,
-            g_vulkan->textures[tex].h * MUZZLE_BASE_SIZE_MUL,
-            true,
-            true,
-            0.0f,
-            true);
-        if (!e->r_muzzle)
-        {
-            LOG_ERROR("[tagap_entity] failed to add muzzle flash light");
-            return;
-        }
-        e->r_muzzle->tex = tex;
-        e->r_muzzle->light_colour = (vec4s)
-        {
-            1.0f * MUZZLE_INTENSITY,
-            0.8f * MUZZLE_INTENSITY,
-            0.0f * MUZZLE_INTENSITY,
-            1.0f,
-        };
-        e->r_muzzle->flags |= RENDERABLE_SCALED_BIT;
-        e->r_muzzle->scale = 1.0f;
     }
 
-    // Create entity light renderable
-    if (e->info->light.radius > 0.0f &&
-        e->info->light.intensity > 0.0f)
-    {
-        // Load default light texture
-        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_light.tga");
-        if (tex <= 0)
-        {
-            LOG_ERROR("[tagap_entity] failed to add light (no texture)");
-            return;
-        }
-
-        // Create the light quad
-        e->r_light = renderer_get_renderable_quad_dim_explicit(
-            SHADER_LIGHT,
-            g_vulkan->textures[tex].w * e->info->light.radius * 2.0f,
-            g_vulkan->textures[tex].h * e->info->light.radius * 2.0f,
-            true,
-            true,
-            0.0f,
-            true);
-        if (!e->r_light)
-        {
-            LOG_ERROR("[tagap_entity] failed to add light");
-            return;
-        }
-        e->r_light->tex = tex;
-        e->r_light->light_colour = (vec4s)
-        {
-            e->info->light.colour.x * e->info->light.intensity,
-            e->info->light.colour.y * e->info->light.intensity,
-            e->info->light.colour.z * e->info->light.intensity,
-            1.0f,
-        };
-
-        // Enable light expanding
-        if (e->info->stats[STAT_FX_EXPAND])
-        {
-            e->r_light->flags |= RENDERABLE_SCALED_BIT;
-            e->r_light->scale = 1.0f;
-        }
-    }
-
-    // Create entity flashlight renderable
-    if (e->info->flashlight.halo_radius > 0.0f &&
-        e->info->flashlight.beam_length > 0.0f)
-    {
-        // Load flashlight texture
-        i32 tex = vulkan_texture_load(TAGAP_EFFECTS_DIR "/fx_flashlight.tga");
-        if (tex <= 0)
-        {
-            LOG_ERROR("[tagap_entity] failed to add flashlight (no texture)");
-            return;
-        }
-
-        // Create the flashlight quad
-        e->r_flashlight = renderer_get_renderable_quad_dim_explicit(
-            SHADER_LIGHT,
-            g_vulkan->textures[tex].w * e->info->flashlight.beam_length * 2.0f,
-            g_vulkan->textures[tex].h * e->info->flashlight.halo_radius * 0.65f,
-            false,
-            true,
-            0.0f,
-            true);
-        if (!e->r_flashlight)
-        {
-            LOG_ERROR("[tagap_entity] failed to add flashlight");
-            return;
-        }
-        e->r_flashlight->tex = tex;
-        e->r_flashlight->light_colour = (vec4s)
-        {
-            e->info->flashlight.colour.x * 0.1f,
-            e->info->flashlight.colour.y * 0.1f,
-            e->info->flashlight.colour.z * 0.1f,
-            1.0f,
-        };
-
-        if (e->info->think.mode == THINK_AI_USER)
-        {
-            // Don't cull player flashlight
-            e->r_flashlight->flags |= RENDERABLE_NO_CULL_BIT;
-        }
-        else
-        {
-            // Simple fix for rotated flashlights being culled; not sure if the
-            // rotated points are exactly on point, but it seems to work fine
-            // as-is
-            vec2s bounds_min_new, bounds_max_new;
-            switch ((i32)e->aim_angle)
-            {
-            case -270:
-            case 90:
-                bounds_min_new.x = e->r_flashlight->bounds.min.x;
-                bounds_min_new.y = e->r_flashlight->bounds.min.y;
-                bounds_max_new.x = e->r_flashlight->bounds.min.y;
-                bounds_max_new.y = e->r_flashlight->bounds.max.x;
-                break;
-            case -180:
-            case 180:
-                bounds_min_new.x = -e->r_flashlight->bounds.max.x;
-                bounds_min_new.y = e->r_flashlight->bounds.min.y;
-                bounds_max_new.x = e->r_flashlight->bounds.min.x;
-                bounds_max_new.y = e->r_flashlight->bounds.max.y;
-                break;
-            case -90:
-            case 270:
-                bounds_min_new.x = e->r_flashlight->bounds.min.y;
-                bounds_min_new.y = -e->r_flashlight->bounds.max.x;
-                bounds_max_new.x = e->r_flashlight->bounds.max.y;
-                bounds_max_new.y = e->r_flashlight->bounds.max.y;
-                break;
-            default:
-                LOG_WARN("[tagap_entity] '%s' flashlight has unusual angle "
-                    "%.0f deg; disabling culling", e->aim_angle);
-                e->r_flashlight->flags |= RENDERABLE_NO_CULL_BIT;
-            case 360:
-            case 0:
-                break;
-            }
-            e->r_flashlight->bounds.min = bounds_min_new;
-            e->r_flashlight->bounds.max = bounds_max_new;
-            LOG_DBUG("[tagap_entity] rotated flashlight bounds: "
-                "%.2f %.2f  %.2f %.2f",
-                e->r_flashlight->bounds.min.x,
-                e->r_flashlight->bounds.min.y,
-                e->r_flashlight->bounds.max.x,
-                e->r_flashlight->bounds.max.y);
-        }
-    }
+    // Initialise entity effects
+    if (entity_fx_init(e) < 0) return;
 
     entity_reset(e, e->position, e->aim_angle, e->flipped);
     e->is_spawned = true;
@@ -305,6 +141,7 @@ entity_update(struct tagap_entity *e)
     entity_think(e);
 
     // Update weapon state
+    e->firing_now = false;
     if (e->info->has_weapon)
     {
         // Update weapon kickback timer
@@ -325,10 +162,10 @@ entity_update(struct tagap_entity *e)
             e->attack_timer > attack_delay)
         {
             entity_spawn_missile(e, missile_info);
-            entity_weapon_fired_particle_fx(e, missile_info);
-            e->muzzle_timer = 1.0f;
+            e->fx.muzzle_timer = 1.0f;
             e->attack_timer = 0.0f;
             e->weapon_kick_timer = KICK_TIMER_MAX;
+            e->firing_now = true;
 
             // Decrement ammo
             --e->weapons[e->weapon_slot].ammo;
@@ -600,74 +437,8 @@ entity_update(struct tagap_entity *e)
         spr_r->rot = spr_rot;
     }
 
-    if (e->r_light)
-    {
-        // Update light position
-        e->r_light->pos = glms_vec2_add(glms_vec2_add(e->position, (vec2s)
-        {
-            e->info->stats[STAT_FX_OFFSXFACE] * flip_mul,
-            0.0f,
-        }), e->info->offsets[OFFSET_FX_OFFSET]);
-        e->r_light->pos.y *= -1.0f;
-
-        // Update entity light dim (don't modify alpha as e.g. FX_FADE can
-        // modify it)
-        e->timer_dim += (DT + e->info->stats[STAT_FX_DIM]) * 6.75f;
-        f32 dim = (sinf(e->timer_dim) + 1.0f) / 4.0f + 0.5f;
-        e->r_light->light_colour.x =
-            e->info->light.colour.x * e->info->light.intensity * dim;
-        e->r_light->light_colour.y =
-            e->info->light.colour.y * e->info->light.intensity * dim;
-        e->r_light->light_colour.z =
-            e->info->light.colour.z * e->info->light.intensity * dim;
-    }
-
-    if (e->r_flashlight)
-    {
-        // Update flashlight position and rotation
-        vec2s origin = e->info->flashlight.origin;
-        //origin.y *= -1.0f;
-        e->r_flashlight->pos = e->position;
-        e->r_flashlight->offset = origin;
-        e->r_flashlight->offset.x -= 24.0f * cosf(glm_rad(e->aim_angle));
-        e->r_flashlight->offset.y -= 24.0f * sinf(glm_rad(e->aim_angle));
-        e->r_flashlight->pos.y *= -1.0f;
-        e->r_flashlight->rot = e->aim_angle;
-        SET_BIT(e->r_flashlight->flags, RENDERABLE_FLIPPED_BIT, e->flipped);
-    }
-
-    if (e->r_muzzle)
-    {
-        struct tagap_entity_info *missile =
-            g_level->weapons[e->weapon_slot].primary;
-        f32 xflip = (f32)e->flipped * -2.0f + 1.0f;
-        mat3s mat = GLMS_MAT3_IDENTITY_INIT;
-        mat = glms_rotate2d(mat, glm_rad(e->aim_angle) * xflip);
-        vec3s offset = (vec3s)
-        {
-            missile->offsets[OFFSET_WEAPON_OFFSET].x * xflip,
-            missile->offsets[OFFSET_WEAPON_OFFSET].y,
-        };
-        offset = glms_mat3_mulv(mat, offset);
-        vec2s offset2 = (vec2s){ offset.x, offset.y };
-        vec2s pos = glms_vec2_add(e->position, offset2);
-        pos.y += missile->offsets[OFFSET_WEAPON_ORIGIN].y;
-        pos.x += missile->offsets[OFFSET_WEAPON_ORIGIN].x * xflip;
-        pos.y *= -1.0f;
-
-        // Update muzzle light
-        e->r_muzzle->pos = pos;
-        e->r_muzzle->scale = clamp01(e->muzzle_timer) *
-            g_level->weapons[e->weapon_slot].primary->stats[STAT_FX_MUZZLE] /
-            100.0f;
-        if (e->muzzle_timer >= 0.0f)
-        {
-            e->muzzle_timer -= DT * MUZZLE_FLASH_SPEED;
-        }
-    }
-
-    // Apply particle effects
-    entity_apply_particle_fx(e);
+    // Apply effects
+    entity_fx_update(e);
 }
 
 void
@@ -710,8 +481,7 @@ entity_reset(
     e->blink_timer = 0;
     e->timer_tempmissile = 0.0f;
     e->attack_timer = 0.0f;
-    e->timer_dim = 0.0f;
-    e->muzzle_timer = -1.0f;
+    entity_fx_reset(&e->fx);
 }
 
 void
@@ -748,18 +518,7 @@ entity_set_inactive_hidden(struct tagap_entity *e, bool h)
     }
 
     // Toggle lights
-    if (e->r_light)
-    {
-        SET_BIT(e->r_light->flags, RENDERABLE_HIDDEN_BIT, h);
-    }
-    if (e->r_flashlight)
-    {
-        SET_BIT(e->r_flashlight->flags, RENDERABLE_HIDDEN_BIT, h);
-    }
-    if (e->r_muzzle)
-    {
-        SET_BIT(e->r_muzzle->flags, RENDERABLE_HIDDEN_BIT, h);
-    }
+    entity_fx_toggle(&e->fx, h);
 }
 
 /*

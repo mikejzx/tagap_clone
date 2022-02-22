@@ -981,7 +981,7 @@ vulkan_record_command_buffers(
     static const VkCommandBufferBeginInfo begin_info =
     {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = 0,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
     if (vkBeginCommandBuffer(cbuf, &begin_info) != VK_SUCCESS)
     {
@@ -1405,11 +1405,11 @@ vulkan_check_should_cull_obj(struct renderable *o, vec3s *cam_pos)
 static i32
 vulkan_create_sync_objects(void)
 {
-    VkSemaphoreCreateInfo semaphore_info =
+    static const VkSemaphoreCreateInfo semaphore_info =
     {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
-    VkFenceCreateInfo fence_info =
+    static const VkFenceCreateInfo fence_info =
     {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         // Need to start signalled so that vkWaitForFences doesn't wait forever
@@ -1557,6 +1557,8 @@ vulkan_begin_oneshot_cmd(void)
         return VK_NULL_HANDLE;
     }
 
+    //LOG_DBUG("[vulkan] begin oneshot command");
+
     return cmdbuf;
 }
 
@@ -1590,7 +1592,7 @@ vulkan_end_oneshot_cmd(VkCommandBuffer cmdbuf)
     // Wait for command to complete
     vkQueueWaitIdle(g_vulkan->qfams[VKQ_GRAPHICS].queue);
 
-    // Free the staging buffer as we no longer need it
+    // Free the command buffer as we no longer need it
     vkFreeCommandBuffers(g_vulkan->d, g_vulkan->cmd_pool, 1, &cmdbuf);
     return 0;
 fail:
@@ -1813,6 +1815,70 @@ vulkan_copy_buffer(VkBuffer a, VkBuffer b, size_t size)
     vkCmdCopyBuffer(cmdbuf, a, b, 1, &copy_region);
 
     if (vulkan_end_oneshot_cmd(cmdbuf) < 0) return -1;
+
+    return 0;
+}
+
+/*
+ * Records a buffer copy command
+ */
+i32
+vulkan_copy_buffer_using_cmdbuffer(
+    VkCommandBuffer cmdbuf,
+    VkFence fence,
+    VkBuffer a,
+    VkBuffer b,
+    size_t size)
+{
+    // Wait for any previous command to complete
+    vkWaitForFences(g_vulkan->d, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkResetFences(g_vulkan->d, 1, &fence);
+
+    // Begin recording
+    static const VkCommandBufferBeginInfo begin_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    if (vkBeginCommandBuffer(cmdbuf, &begin_info) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to begin recording command buffer");
+        return -1;
+    }
+
+    // Set buffers to copy
+    const VkBufferCopy copy_region =
+    {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = (VkDeviceSize)size,
+    };
+    vkCmdCopyBuffer(cmdbuf, a, b, 1, &copy_region);
+
+    // End recording
+    if (vkEndCommandBuffer(cmdbuf) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to record command buffer");
+        return -1;
+    }
+
+    // Submit the command
+    const VkSubmitInfo submit_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmdbuf,
+    };
+    if (vkQueueSubmit(
+        g_vulkan->qfams[VKQ_GRAPHICS].queue,
+        1,
+        &submit_info,
+        fence) != VK_SUCCESS)
+    {
+        LOG_ERROR("[vulkan] failed to submit buffer transfer command buffer!");
+        return -1;
+    }
 
     return 0;
 }

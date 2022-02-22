@@ -147,7 +147,7 @@ entity_think_missile(struct tagap_entity *e)
         }
 
         // Expand light
-        if (e->r_light) e->r_light->scale = new_scale;
+        if (e->fx.r_light) e->fx.r_light->scale = new_scale;
     }
 
     // Fade missile
@@ -161,6 +161,6 @@ entity_think_missile(struct tagap_entity *e)
         }
 
         // Fade light
-        if (e->r_light) e->r_light->light_colour.w = new_alpha;
+        if (e->fx.r_light) e->fx.r_light->light_colour.w = new_alpha;
     }
 }

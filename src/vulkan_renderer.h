@@ -121,6 +121,8 @@ i32 vulkan_create_buffer(VkDeviceSize,
     VkBuffer *,
     VmaAllocation *);
 i32 vulkan_copy_buffer(VkBuffer, VkBuffer, size_t);
+i32 vulkan_copy_buffer_using_cmdbuffer(VkCommandBuffer, VkFence,
+    VkBuffer, VkBuffer, size_t);
 
 i32 vulkan_render_frame_pre(void);
 i32 vulkan_record_command_buffers(struct renderer_obj_group *, size_t, vec3s *);

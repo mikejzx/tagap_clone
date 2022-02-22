@@ -4,6 +4,7 @@
 #include "tagap_sprite.h"
 #include "tagap_entity_think.h"
 #include "tagap_entity_movetype.h"
+#include "tagap_entity_fx.h"
 #include "tagap_weapon.h"
 #include "collision.h"
 #include "entity_pool.h"
@@ -28,6 +29,7 @@ enum tagap_entity_stat_id
 
     // FX stats
     STAT_FX_DIM,
+    STAT_FX_DISABLE,
     STAT_FX_EXPAND,
     STAT_FX_FADE,
     STAT_FX_MUZZLE,
@@ -51,6 +53,7 @@ static const char *STAT_NAMES[] =
     [STAT_DAMAGE]         = "DAMAGE",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
     [STAT_FX_DIM]         = "FX_DIM",
+    [STAT_FX_DISABLE]     = "FX_DISABLE",
     [STAT_FX_EXPAND]      = "FX_EXPAND",
     [STAT_FX_FADE]        = "FX_FADE",
     [STAT_FX_MUZZLE]      = "FX_MUZZLE",
@@ -271,21 +274,10 @@ struct tagap_entity
     } weapons[WEAPON_SLOT_COUNT];
     i32 weapon_slot;
     f32 weapon_kick_timer;
+    bool firing_now;
 
-    // Effects
-    //struct tagap_entity_effect fx[ENTITY_MAX_EFFECTS];
-    //u32 fx_count;
-
-    // Light renderer
-    struct renderable *r_light;
-    f32 timer_dim;
-
-    // Flashlight renderer
-    struct renderable *r_flashlight;
-
-    // Muzzle flash (light) renderer
-    struct renderable *r_muzzle;
-    f32 muzzle_timer;
+    // FX data
+    struct tagap_entity_fx fx;
 };
 
 void entity_spawn(struct tagap_entity *);
