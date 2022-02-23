@@ -12,7 +12,7 @@
 #define PUSHUP_MAX_ANGLE (5.0f)
 
 static void entity_spawn_missile(struct tagap_entity *,
-    struct tagap_entity_info *);
+    struct tagap_entity_info *, f32);
 static void create_gunent(struct tagap_entity *, bool);
 
 /*
@@ -110,7 +110,7 @@ entity_spawn(struct tagap_entity *e)
         g_map->player = e;
 
         e->weapons[0].ammo = 15;
-#if 0 //DEBUG
+#if DEBUG
         // Temporary: give user a bunch of ammo to start with (to test
         // different weapons)
         e->weapons[1].ammo = 300;
@@ -176,7 +176,23 @@ entity_update(struct tagap_entity *e)
             e->inputs.fire &&
             e->attack_timer > attack_delay)
         {
-            entity_spawn_missile(e, missile_info);
+            f32 ang_base = 5.0f * (e->weapon_multishot - 1);
+            for (u32 s = 0; s < e->weapon_multishot; ++s)
+            {
+                f32 angle = lerpf(ang_base,
+                    -ang_base, (f32)s / (e->weapon_multishot - 1))
+                    + e->aim_angle;
+
+                // Store angle for tracer effects
+                e->weapon_multishot_angles[s] = angle;
+
+                // Spawn missile/projectile for each multishot.
+                if (!missile_info->stats[STAT_FX_BULLET])
+                {
+                    entity_spawn_missile(e, missile_info, angle);
+                }
+            }
+
             e->fx.muzzle_timer = 1.0f;
             e->attack_timer = 0.0f;
             e->weapon_kick_timer = KICK_TIMER_MAX;
@@ -510,10 +526,11 @@ entity_reset(
     entity_fx_reset(&e->fx);
 }
 
-void
+static void
 entity_spawn_missile(
     struct tagap_entity *owner,
-    struct tagap_entity_info *missile)
+    struct tagap_entity_info *missile,
+    f32 angle)
 {
     vec2s spawn_pos = missile->offsets[OFFSET_WEAPON_MISSILE];
     spawn_pos.x *= (owner->flipped ? -1.0f : 1.0f);
@@ -525,7 +542,7 @@ entity_spawn_missile(
 
     entity_reset(missile_e,
         spawn_pos,
-        owner->aim_angle,
+        angle,
         owner->flipped);
     missile_e->owner = owner;
     missile_e->with_owner = false;
@@ -631,4 +648,13 @@ entity_change_weapon_slot(struct tagap_entity *e, i32 slot)
 
         entity_set_inactive_hidden(e->weapons[w].gunent, w != slot);
     }
+
+    struct tagap_entity_info *missile_info =
+        g_level->weapons[e->weapon_slot].primary;
+
+    // Update shoot direction count
+    e->weapon_multishot = clamp(
+        missile_info->stats[STAT_MULTISHOT],
+        1,
+        WEAPON_MAX_MULTISHOT - 1);
 }

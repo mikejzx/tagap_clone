@@ -8,6 +8,7 @@ struct particle_system *g_parts;
 
 const char *PARTICLE_TEX_NAMES[] =
 {
+    //[PARTICLE_BEAM] = TAGAP_EFFECTS_DIR "/particle_smoke.tga",
     [PARTICLE_SMOKE] = TAGAP_EFFECTS_DIR "/particle_smoke.tga",
     [PARTICLE_EXPLOSION] = TAGAP_EFFECTS_DIR "/fx_explosion.tga",
 };
@@ -120,11 +121,15 @@ particles_init(void)
         LOG_ERROR("[particle] failed to create buffer-copy fence!");
         return;
     }
+
+    vmaMapMemory(g_vulkan->vma,
+        g_parts->staging_buf_alloc, (void **)&g_parts->quad_buffer);
 }
 
 void
 particles_deinit(void)
 {
+    vmaUnmapMemory(g_vulkan->vma, g_parts->staging_buf_alloc);
     vkDestroyFence(g_vulkan->d, g_parts->fence, NULL);
     vmaDestroyBuffer(g_vulkan->vma,
         g_parts->staging_buf, g_parts->staging_buf_alloc);
@@ -136,8 +141,6 @@ void
 particles_update(void)
 {
     /* Begin render batch */
-    vmaMapMemory(g_vulkan->vma,
-        g_parts->staging_buf_alloc, (void **)&g_parts->quad_buffer);
     g_parts->quad_ptr = (struct quad_ptl *)g_parts->quad_buffer;
     g_parts->r->ib.index_count = 0;
 
@@ -168,40 +171,59 @@ particles_update(void)
         p->props.rot += p->props.rot_speed * DT;
 
         // Linearly interpolate properties
-        p->props.size.now =
-            lerpf(p->props.size.begin, p->props.size.end, life_norm);
+        p->props.size_x.now =
+            lerpf(p->props.size_x.begin, p->props.size_x.end, life_norm);
+        if (p->props.independent_sizes)
+        {
+            p->props.size_y.now =
+                lerpf(p->props.size_y.begin, p->props.size_y.end, life_norm);
+        }
+        else
+        {
+            p->props.size_y.now = p->props.size_x.now;
+        }
         p->props.opacity.now =
             lerpf(p->props.opacity.begin, p->props.opacity.end, life_norm);
 
         u32 tex_index = particle_lookup_tex_index(p->props.type);
 
         // Add the quad to the buffer
-        f32 w = p->props.size.now / 2.0f;
-        f32 h = w;
+        f32 xflip = (f32)p->props.flip_x * -2.0f + 1.0f;
         struct vertex_ptl vertices[4] =
         {
-            { { -w, -h }, p->props.opacity.now, tex_index },
-            { { -w, +h }, p->props.opacity.now, tex_index },
-            { { +w, +h }, p->props.opacity.now, tex_index },
-            { { +w, -h }, p->props.opacity.now, tex_index },
+            { { -0.5f * xflip, -0.5f }, p->props.opacity.now, tex_index },
+            { { -0.5f * xflip, +0.5f }, p->props.opacity.now, tex_index },
+            { { +0.5f * xflip, +0.5f }, p->props.opacity.now, tex_index },
+            { { +0.5f * xflip, -0.5f }, p->props.opacity.now, tex_index },
         };
+        mat4s model = glms_scale(glms_rotate_z(
+        glms_translate((mat4s)GLMS_MAT4_IDENTITY_INIT, (vec3s)
+        {
+            p->props.pos.x,
+            p->props.pos.y,
+            0.0f,
+        }), glm_rad(p->props.rot)), (vec3s)
+        {
+            p->props.size_x.now,
+            p->props.size_y.now,
+            0.0f,
+        });
+        vec4s tmp;
         for (u32 v = 0; v < 4; ++v)
         {
-            vertices[v].pos = glms_vec2_add(vertices[v].pos, p->props.pos);
+            tmp = (vec4s){ vertices[v].pos.x, vertices[v].pos.y, 0.0f, 1.0f };
+            tmp = glms_mat4_mulv(model, tmp);
+            vertices[v].pos = (vec2s){ tmp.x, tmp.y };
         }
         // Note we must write sequentially here as we declared
         // VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
         memcpy(g_parts->quad_ptr++, vertices, sizeof(struct quad_ptl));
         g_parts->r->ib.index_count += 6;
-
-        //LOG_DBUG("quad at %d (%.2f, %.2f), with l:%.2f o:%.2f, %d",
-        //  i, w, h, p->life_remain, p->props.opacity, sizeof(struct quad_ptl));
     }
 
     /*
      * End batch: unmap staging buffer, copy the data into the vertex buffer
      */
-    vmaUnmapMemory(g_vulkan->vma, g_parts->staging_buf_alloc);
     if ((struct vertex_ptl *)g_parts->quad_ptr == g_parts->quad_buffer)
     {
         return;
@@ -222,16 +244,16 @@ particles_update(void)
 }
 
 void
-particle_emit(struct particle_system *ps, struct particle_props *props)
+particle_emit(struct particle_props *props)
 {
-    struct particle *p = &ps->pool[ps->index];
-    //LOG_DBUG("[particle] emitting particle %d", ps->index);
+    struct particle *p = &g_parts->pool[g_parts->index];
+    //LOG_DBUG("[particle] emitting particle %d", g_parts->index);
 
     p->active = true;
     p->props = *props;
     p->life_remain = props->lifetime;
 
     // Adjust index, just wrap back around when we run out
-    --ps->index;
-    ps->index %= MAX_PARTICLES;
+    --g_parts->index;
+    g_parts->index %= MAX_PARTICLES;
 }

@@ -58,7 +58,16 @@ struct particle_props
     f32 rot_speed;
 
     // Beginning and end size of the particle
-    struct timed_f32 size;
+    union
+    {
+        struct timed_f32 size;
+        struct timed_f32 size_x;
+    };
+    struct timed_f32 size_y;
+    bool independent_sizes; // Whether X/Y are seperate
+
+    // Flip texture along X
+    bool flip_x;
 
     // Beginning and end opacity of particle
     struct timed_f32 opacity;
@@ -116,6 +125,6 @@ extern struct particle_system *g_parts;
 void particles_init(void);
 void particles_deinit(void);
 void particles_update(void);
-void particle_emit(struct particle_system *, struct particle_props *);
+void particle_emit(struct particle_props *);
 
 #endif

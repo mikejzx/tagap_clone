@@ -52,6 +52,12 @@ entity_fx_update(struct tagap_entity *e)
 {
     struct tagap_entity_fx *const fx = &e->fx;
 
+    struct tagap_entity_info *missile = NULL;
+    if (e->weapon_slot >= 0 && e->weapon_slot < WEAPON_SLOT_COUNT)
+    {
+        missile = g_level->weapons[e->weapon_slot].primary;
+    }
+
     f32 xflip = (f32)e->flipped * -2.0f + 1.0f;
 
     mat3s mat = GLMS_MAT3_IDENTITY_INIT;
@@ -104,9 +110,6 @@ entity_fx_update(struct tagap_entity *e)
 
     if (fx->r_muzzle && !e->info->stats[STAT_FX_DISABLE])
     {
-        struct tagap_entity_info *missile =
-            g_level->weapons[e->weapon_slot].primary;
-
         offset = glms_mat3_mulv(mat, (vec3s)
         {
             missile->offsets[OFFSET_WEAPON_OFFSET].x * xflip,
@@ -142,6 +145,53 @@ entity_fx_update(struct tagap_entity *e)
     f32 ang_sin = sinf(glm_rad(ang));
 
     /*
+     * Bullet effect for trace attacks.  These are not actual projectiles and
+     * are simply for visual feedback of where trace attack weapon is shooting
+     */
+    if (missile && missile->stats[STAT_FX_BULLET] && e->firing_now)
+    {
+        struct particle_props props =
+        {
+            .type = PARTICLE_BEAM,
+            .size_x.begin = 96.0f * 1.5f,
+            .size_x.end = 128.0f * 1.5f,
+            .size_y.begin = 16.0f,
+            .size_y.end = 16.0f,
+            .independent_sizes = true,
+            .flip_x = !e->flipped,
+            .opacity.begin = 1.0f,
+            .opacity.end = 0.0f,
+            .lifetime = 0.2f,
+        };
+        offset = glms_mat3_mulv(mat, (vec3s)
+        {
+            missile->offsets[OFFSET_WEAPON_OFFSET].x * xflip,
+            missile->offsets[OFFSET_WEAPON_OFFSET].y,
+            0.0f,
+        });
+        props.pos = (vec2s)
+        {
+            e->position.x + offset.x +
+                missile->offsets[OFFSET_WEAPON_ORIGIN].x * xflip,
+            e->position.y + offset.y +
+                missile->offsets[OFFSET_WEAPON_ORIGIN].y,
+        };
+
+        // Emit tracer for each multishot
+        for (u32 s = 0; s < e->weapon_multishot; ++s)
+        {
+            f32 angle = e->weapon_multishot_angles[s];
+            props.rot = angle * xflip,
+            props.velo = (vec2s)
+            {
+                cosf(glm_rad(angle)) * 3192.0f * xflip,
+                sinf(glm_rad(angle)) * 3192.0f,
+            };
+            particle_emit(&props);
+        }
+    }
+
+    /*
      * Weapon firing smoke
      */
     static const f32 FIRE_SMOKE_VELO = 96.0f;
@@ -156,9 +206,6 @@ entity_fx_update(struct tagap_entity *e)
     };
     if (e->firing_now)
     {
-        struct tagap_entity_info *missile=
-            g_level->weapons[e->weapon_slot].primary;
-
         offset = glms_mat3_mulv(mat, (vec3s)
         {
             missile->offsets[OFFSET_WEAPON_OFFSET].x * xflip,
@@ -178,7 +225,7 @@ entity_fx_update(struct tagap_entity *e)
             ang_sin * FIRE_SMOKE_VELO,
         };
         // Emit weapon fire smoke
-        particle_emit(g_parts, &props);
+        particle_emit(&props);
     }
 
     /*
@@ -222,7 +269,7 @@ entity_fx_update(struct tagap_entity *e)
     };
 
     // Emit smoke trail
-    particle_emit(g_parts, &props);
+    particle_emit(&props);
 }
 
 static i32

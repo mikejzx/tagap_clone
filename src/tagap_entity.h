@@ -13,6 +13,7 @@
 #define ENTITY_MAX_SPRITES 32
 #define PLAYER_WEAPON_COUNT 10
 #define PLAYER_MAX_EFFECTS 10
+#define WEAPON_MAX_MULTISHOT 32
 
 // Values that can be applied to entities
 enum tagap_entity_stat_id
@@ -25,9 +26,11 @@ enum tagap_entity_stat_id
     // Misc
     STAT_CHARGE,
     STAT_DAMAGE,
+    STAT_MULTISHOT,
     STAT_TEMPMISSILE,
 
     // FX stats
+    STAT_FX_BULLET,
     STAT_FX_DIM,
     STAT_FX_DISABLE,
     STAT_FX_EXPAND,
@@ -52,7 +55,9 @@ static const char *STAT_NAMES[] =
     [STAT_UNKNOWN]        = "",
     [STAT_CHARGE]         = "CHARGE",
     [STAT_DAMAGE]         = "DAMAGE",
+    [STAT_MULTISHOT]      = "MULTISHOT",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
+    [STAT_FX_BULLET]      = "FX_BULLET",
     [STAT_FX_DIM]         = "FX_DIM",
     [STAT_FX_DISABLE]     = "FX_DISABLE",
     [STAT_FX_EXPAND]      = "FX_EXPAND",
@@ -281,6 +286,8 @@ struct tagap_entity
     i32 weapon_slot;
     f32 weapon_kick_timer;
     bool firing_now;
+    u32 weapon_multishot;
+    f32 weapon_multishot_angles[WEAPON_MAX_MULTISHOT];
 
     // FX data
     struct tagap_entity_fx fx;
