@@ -69,6 +69,9 @@ struct particle_props
     // Flip texture along X
     bool flip_x;
 
+    // Set to 0,0 for centred particle
+    vec2s pivot_bias;
+
     // Beginning and end opacity of particle
     struct timed_f32 opacity;
 

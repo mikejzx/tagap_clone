@@ -150,18 +150,24 @@ entity_fx_update(struct tagap_entity *e)
      */
     if (missile && missile->stats[STAT_FX_BULLET] && e->firing_now)
     {
+        static const f32
+            TRACER_W = 144.0f,
+            TRACER_W_GROW = 0.75f,
+            TRACER_H = 16.0f,
+            TRACER_H_GROW = 0.0f,
+            TRACER_SPEED = 3192.0f;
         struct particle_props props =
         {
             .type = PARTICLE_BEAM,
-            .size_x.begin = 96.0f * 1.5f,
-            .size_x.end = 128.0f * 1.5f,
-            .size_y.begin = 16.0f,
-            .size_y.end = 16.0f,
+            .size_x.begin = TRACER_W,
+            .size_x.end = TRACER_W + TRACER_W * TRACER_W_GROW,
+            .size_y.begin = TRACER_H,
+            .size_y.end = TRACER_H + TRACER_H * TRACER_H_GROW,
             .independent_sizes = true,
             .flip_x = !e->flipped,
             .opacity.begin = 1.0f,
             .opacity.end = 0.0f,
-            .lifetime = 0.2f,
+            .lifetime = 0.15f,
         };
         offset = glms_mat3_mulv(mat, (vec3s)
         {
@@ -176,16 +182,21 @@ entity_fx_update(struct tagap_entity *e)
             e->position.y + offset.y +
                 missile->offsets[OFFSET_WEAPON_ORIGIN].y,
         };
+        props.pivot_bias = (vec2s)
+        {
+            -0.7f, 0.0f
+        };
 
         // Emit tracer for each multishot
         for (u32 s = 0; s < e->weapon_multishot; ++s)
         {
             f32 angle = e->weapon_multishot_angles[s];
+            f32 c = cosf(glm_rad(angle)), s = sinf(glm_rad(angle));
             props.rot = angle * xflip,
             props.velo = (vec2s)
             {
-                cosf(glm_rad(angle)) * 3192.0f * xflip,
-                sinf(glm_rad(angle)) * 3192.0f,
+                c * TRACER_SPEED * xflip,
+                s * TRACER_SPEED
             };
             particle_emit(&props);
         }

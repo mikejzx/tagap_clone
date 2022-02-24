@@ -8,7 +8,7 @@ struct particle_system *g_parts;
 
 const char *PARTICLE_TEX_NAMES[] =
 {
-    //[PARTICLE_BEAM] = TAGAP_EFFECTS_DIR "/particle_smoke.tga",
+    [PARTICLE_BEAM] = TAGAP_DATA_MOD_DIR "/art/effects/fx_beam.tga",
     [PARTICLE_SMOKE] = TAGAP_EFFECTS_DIR "/particle_smoke.tga",
     [PARTICLE_EXPLOSION] = TAGAP_EFFECTS_DIR "/fx_explosion.tga",
 };
@@ -191,10 +191,34 @@ particles_update(void)
         f32 xflip = (f32)p->props.flip_x * -2.0f + 1.0f;
         struct vertex_ptl vertices[4] =
         {
-            { { -0.5f * xflip, -0.5f }, p->props.opacity.now, tex_index },
-            { { -0.5f * xflip, +0.5f }, p->props.opacity.now, tex_index },
-            { { +0.5f * xflip, +0.5f }, p->props.opacity.now, tex_index },
-            { { +0.5f * xflip, -0.5f }, p->props.opacity.now, tex_index },
+            {
+                {
+                    (p->props.pivot_bias.x * 0.5f - 0.5f) * xflip,
+                    (p->props.pivot_bias.y * 0.5f - 0.5f)
+                },
+                p->props.opacity.now, tex_index
+            },
+            {
+                {
+                    (p->props.pivot_bias.x * 0.5f - 0.5f) * xflip,
+                    (p->props.pivot_bias.y * 0.5f + 0.5f)
+                },
+                p->props.opacity.now, tex_index
+            },
+            {
+                {
+                    (p->props.pivot_bias.x * 0.5f + 0.5f) * xflip,
+                    (p->props.pivot_bias.y * 0.5f + 0.5f)
+                },
+                p->props.opacity.now, tex_index
+            },
+            {
+                {
+                    (p->props.pivot_bias.x * 0.5f + 0.5f) * xflip,
+                    (p->props.pivot_bias.y * 0.5f - 0.5f)
+                },
+                p->props.opacity.now, tex_index
+            },
         };
         mat4s model = glms_scale(glms_rotate_z(
         glms_translate((mat4s)GLMS_MAT4_IDENTITY_INIT, (vec3s)
