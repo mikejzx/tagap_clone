@@ -163,6 +163,15 @@ main (i32 argc, char **argv)
             tagap_set_state(GAME_STATE_LEVEL);
             break;
         case GAME_STATE_LEVEL:
+            static bool first_frame = true;
+            if (first_frame)
+            {
+                // Don't update on first frame because the deltatime is still
+                // out of whack
+                first_frame = false;
+                break;
+            }
+
             // Update the level
             level_update();
 

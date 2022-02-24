@@ -18,6 +18,9 @@ enum tagap_anim
     // Constant panning forward/back/up/down
     ANIM_PANFORWARD, ANIM_PANBACK, ANIM_PANUP, ANIM_PANDOWN,
 
+    // Attack panning forward/back/up/down
+    ANIM_PANATTF, ANIM_PANATTB, ANIM_PANATTU, ANIM_PANATTD,
+
     // Weapon animation with parametric recoil
     ANIM_WEAPON,
 
@@ -35,6 +38,10 @@ static const char *ANIM_NAMES[] =
     [ANIM_PANBACK]     = "ANIM_PANBACK",
     [ANIM_PANUP]       = "ANIM_PANUP",
     [ANIM_PANDOWN]     = "ANIM_PANDOWN",
+    [ANIM_PANATTF]     = "ANIM_PANATTF",
+    [ANIM_PANATTB]     = "ANIM_PANATTB",
+    [ANIM_PANATTU]     = "ANIM_PANATTU",
+    [ANIM_PANATTD]     = "ANIM_PANATTD",
     [ANIM_WEAPON]      = "ANIM_WEAPON",
     [ANIM_WEAPON2]     = "ANIM_WEAPON2",
 };

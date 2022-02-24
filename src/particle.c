@@ -101,11 +101,61 @@ particles_update(void)
         // Don't update inactive particles
         if (!p->active) continue;
 
+        // Set to die next on this frame
+        if (p->die_next)
+        {
+            p->die_next = false;
+            p->active = false;
+            continue;
+        }
+
         // Dead particle
         if (p->life_remain <= 0.0f)
         {
             p->active = false;
             continue;
+        }
+
+        // Check if particle is at it's endpoint yet.  Done with a simple
+        // check for when signs of position differences change
+        if (p->props.has_precise_endpoint)
+        {
+            // Adjusted endpoint (to account for pivot)
+            vec2s ep = (vec2s)
+            {
+                p->props.precise_endpoint.x + lerpf(
+                    -p->props.size_x.now / 2.0f,
+                    p->props.size_x.now / 2.0f,
+                    p->props.pivot_bias.x * 0.5f + 0.5f) *
+                    cosf(glm_rad(p->props.rot)),
+                p->props.precise_endpoint.y + lerpf(
+                    -p->props.size_y.now / 2.0f,
+                    p->props.size_y.now / 2.0f,
+                    p->props.pivot_bias.y * 0.5f + 0.5f) *
+                    sinf(glm_rad(p->props.rot)),
+            };
+            vec2s diff_sgn = (vec2s)
+            {
+                sign(p->props.pos.x - ep.x),
+                sign(p->props.pos.y - ep.y),
+            };
+            bool eq_sgn_x = diff_sgn.x == p->old_diff_sgn.x,
+                 eq_sgn_y = diff_sgn.y == p->old_diff_sgn.y;
+            if (p->old_diff_sgn_init &&
+                (!eq_sgn_x || !eq_sgn_y))
+            {
+                p->die_next = true;
+                if (!eq_sgn_x)
+                {
+                    p->props.pos.x = ep.x;
+                }
+                if (!eq_sgn_y)
+                {
+                    //p->props.pos.y = ep.y;
+                }
+            }
+            p->old_diff_sgn = diff_sgn;
+            p->old_diff_sgn_init = true;
         }
 
         p->life_remain -= DT;

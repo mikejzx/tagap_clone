@@ -178,12 +178,26 @@ entity_think_item(struct tagap_entity *e)
         ITEM_RADIUS * ITEM_RADIUS)
     {
         // Copy the ammunition from item to player's store
+        i32 set_slot = -1;
         for (u32 w = 0; w < WEAPON_SLOT_COUNT; ++w)
         {
+            if (e->weapons[w].ammo > 0 &&
+                g_map->player->weapons[w].ammo == 0)
+            {
+                // Player doesn't have this weapon; we set their slot to it.
+                set_slot = w;
+            }
+
             g_map->player->weapons[w].ammo += e->weapons[w].ammo;
         }
 
         // Destroy the pickup
         entity_die(e);
+
+        // Set player weapon slot
+        if (set_slot > -1)
+        {
+            entity_change_weapon_slot(g_map->player, set_slot);
+        }
     }
 }

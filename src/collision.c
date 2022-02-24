@@ -14,19 +14,24 @@ collision_check(struct tagap_entity *e, struct collision_result *c)
     {
         struct tagap_linedef *l = &g_map->linedefs[i];
 
-        // These radii are a bit dodgey, but seems to work alright for now
+        // These radii are really dodgey (not 100% sure how they should be
+        // handled), but seems to work alright for now
         f32 max_radius = max(e->info->offsets[OFFSET_SIZE].x,
             e->info->offsets[OFFSET_SIZE].y);
         f32 radius_y = 0.0f;
-        if (e->info->offsets[OFFSET_SIZE].y > 0.0f)
-        {
+        //if (e->info->offsets[OFFSET_SIZE].y > 0.0f)
+        //{
             // Note we deliberately use X here (works much better for player)
             radius_y = e->info->offsets[OFFSET_SIZE].x;
+#if 0
         }
         else if (e->info->sprite_count)
         {
-            radius_y = g_vulkan->textures[e->sprites[0]->tex].h;
+            radius_y = e->info->offsets[OFFSET_SIZE].x;
+            //radius_y = g_vulkan->textures[e->sprites[0]->tex].h / 2.0f;
+            //radius_y = 1;
         }
+#endif
 
         vec2s leftmost;
         vec2s rightmost;
@@ -54,11 +59,25 @@ collision_check(struct tagap_entity *e, struct collision_result *c)
             f32 shift = leftmost.y - gradient * leftmost.x;
             f32 y_line = gradient * e->position.x + shift;
 
+            // Use gradient of velocity to see if we get a collision
+            // (allows us to come in from underneath floors)
+            f32 velo_gradient;
+            if (e->velo.x != 0.0f)
+            {
+                //LOG_DBUG("%.2f vs %.2f", e->velo.y / e->velo.x, gradient);
+                velo_gradient = e->velo.y / fabs(e->velo.x);
+            }
+            else
+            {
+                velo_gradient = e->velo.y;
+            }
+
             /* Floor collision check */
             if ((l->style == LINEDEF_STYLE_FLOOR ||
                     l->style == LINEDEF_STYLE_PLATE_FLOOR) &&
                 !c->below &&
-                e->velo.y <= 0.0f &&
+                //e->velo.y <= 0.0f &&
+                velo_gradient <= gradient &&
                 e->position.y - radius_y <= y_line &&
                 e->position.y >= y_line)
             {
@@ -127,4 +146,14 @@ collision_check(struct tagap_entity *e, struct collision_result *c)
             continue;
         }
     }
+}
+
+/* Perform 'trace' collision check */
+void
+collision_check_trace(
+    vec2s from,
+    f32 angle,
+    f32 range,
+    struct collision_trace_result *result)
+{
 }

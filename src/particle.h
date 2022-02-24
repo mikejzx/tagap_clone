@@ -82,6 +82,12 @@ struct particle_props
     bool vertex_colour_muls;
     vec4s vertex_colours[4];
 
+    // Pre-computed particle death point (e.g. for faking collision for use
+    // with bullets/beams).  For bullets this point is the point where trace
+    // attack collides
+    bool has_precise_endpoint;
+    vec2s precise_endpoint;
+
     // Time in seconds that particle takes to die.
     f32 lifetime;
 };
@@ -97,6 +103,13 @@ struct particle
 
     // Time left until particle dies.
     f32 life_remain;
+
+    // For 'precise endpoint' stuff
+    vec2s old_diff_sgn;
+    bool old_diff_sgn_init;
+
+    // Whether to die on next loop
+    bool die_next;
 };
 
 struct quad_ptl

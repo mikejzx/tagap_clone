@@ -19,7 +19,7 @@ struct shader;
  *   meets all requirements.
  */
 
-#define WIDESCREEN
+//#define WIDESCREEN
 #ifndef WIDESCREEN
 #  define WIDTH 800 //1440
 #  define HEIGHT 600 //1080

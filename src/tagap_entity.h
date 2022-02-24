@@ -26,6 +26,8 @@ enum tagap_entity_stat_id
     // Misc
     STAT_CHARGE,
     STAT_DAMAGE,
+    STAT_HIGHROF,
+    STAT_MODELHACK,
     STAT_MULTISHOT,
     STAT_TEMPMISSILE,
 
@@ -55,6 +57,8 @@ static const char *STAT_NAMES[] =
     [STAT_UNKNOWN]        = "",
     [STAT_CHARGE]         = "CHARGE",
     [STAT_DAMAGE]         = "DAMAGE",
+    [STAT_HIGHROF]        = "HIGHROF",
+    [STAT_MODELHACK]      = "MODELHACK",
     [STAT_MULTISHOT]      = "MULTISHOT",
     [STAT_TEMPMISSILE]    = "TEMPMISSILE",
     [STAT_FX_BULLET]      = "FX_BULLET",
@@ -287,7 +291,15 @@ struct tagap_entity
     f32 weapon_kick_timer;
     bool firing_now;
     u32 weapon_multishot;
+    u32 weapon_rof;
     f32 weapon_multishot_angles[WEAPON_MAX_MULTISHOT];
+    struct tagap_entity_trace
+    {
+        bool has_hit;
+        vec2s point;
+    } weapon_traces[WEAPON_MAX_MULTISHOT];
+    f32 weapon_charge_timer;
+    f32 weapon_charge_time;
 
     // FX data
     struct tagap_entity_fx fx;

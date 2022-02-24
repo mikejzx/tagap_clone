@@ -14,6 +14,8 @@
 static void entity_spawn_missile(struct tagap_entity *,
     struct tagap_entity_info *, f32);
 static void create_gunent(struct tagap_entity *, bool);
+static void entity_perform_trace(struct tagap_entity *, f32,
+    struct tagap_entity_trace *);
 
 /*
  * Spawn an entity into the game, and add all sprites, stats, etc.
@@ -165,29 +167,50 @@ entity_update(struct tagap_entity *e)
         struct tagap_entity_info *missile_info =
             g_level->weapons[e->weapon_slot].primary;
 
-        // Fire weapon
         f32 attack_delay = missile_info->think.attack_delay;
         if (e->weapon_slot == 0 && !e->weapons[0].has_akimbo)
         {
             attack_delay *= 1.2f;
         }
+
+        // Charge weapon
+        const f32 charge_time = e->weapon_charge_time;
+        if (e->attack_timer >= attack_delay &&
+            charge_time > 0.0f &&
+            e->weapon_charge_timer > -1.0f &&
+            e->weapon_charge_timer < charge_time)
+        {
+            e->weapon_charge_timer += DT;
+        }
+        if (e->weapon_charge_timer == -1.0f && e->inputs.fire)
+        {
+            e->weapon_charge_timer = 0.0f;
+        }
+
+        // Fire weapon
         if (e->weapons[e->weapon_slot].reload_timer < 0.0f &&
             e->weapons[e->weapon_slot].ammo > 0 &&
-            e->inputs.fire &&
-            e->attack_timer > attack_delay)
+            ((charge_time > 0.0f && e->weapon_charge_timer >= charge_time)
+                || (charge_time == 0.0f && e->inputs.fire)) &&
+            e->attack_timer >= attack_delay)
         {
-            f32 ang_base = 5.0f * (e->weapon_multishot - 1);
-            for (u32 s = 0; s < e->weapon_multishot; ++s)
+            bool tracer = missile_info->stats[STAT_FX_BULLET];
+            f32 shot_count = e->weapon_multishot * e->weapon_rof;
+            u32 ang_base = 5.0f * (shot_count - !tracer);
+            for (u32 s = 0; s < shot_count; ++s)
             {
-                bool tracer = missile_info->stats[STAT_FX_BULLET];
-
-                f32 angle = lerpf(ang_base,
-                    -ang_base, (f32)s / (e->weapon_multishot - 1))
-                    + e->aim_angle;
-
+                f32 angle;
                 if (tracer)
                 {
-                    angle += ((rand() % 10) - 5.0f);
+                    // Tracers have bullets spawn randomly in angle range
+                    angle = (f32)(rand() % (ang_base * 2)) -
+                        ang_base + e->aim_angle;
+                }
+                else
+                {
+                    // Projectiles are spawned precisely at intervals
+                    angle = lerpf(ang_base, -ang_base,
+                        (f32)s / (shot_count - 1)) + e->aim_angle;
                 }
 
                 // Store angle for tracer effects
@@ -198,6 +221,11 @@ entity_update(struct tagap_entity *e)
                 {
                     entity_spawn_missile(e, missile_info, angle);
                 }
+                else
+                {
+                    // Perform trace attack
+                    entity_perform_trace(e, angle, &e->weapon_traces[s]);
+                }
             }
 
             e->fx.muzzle_timer = 1.0f;
@@ -206,7 +234,7 @@ entity_update(struct tagap_entity *e)
             e->firing_now = true;
 
             // Decrement ammo
-            --e->weapons[e->weapon_slot].ammo;
+            e->weapons[e->weapon_slot].ammo -= e->weapon_rof;
 
             // Begin reload
             if (e->weapons[e->weapon_slot].ammo <= 0 &&
@@ -214,6 +242,9 @@ entity_update(struct tagap_entity *e)
             {
                 e->weapons[e->weapon_slot].reload_timer = 0.0f;
             }
+
+            // Reset weapon charge
+            e->weapon_charge_timer = -1.0f;
         }
 
         // Update reload timer
@@ -276,6 +307,9 @@ entity_update(struct tagap_entity *e)
         e->aim_angle  = e->owner->aim_angle;
         e->flipped  = e->owner->flipped;
         e->weapon_kick_timer  = e->owner->weapon_kick_timer;
+        e->inputs.fire = e->owner->inputs.fire;
+        e->weapon_charge_timer = e->owner->weapon_charge_timer;
+        e->weapon_charge_time = e->owner->weapon_charge_time;
     }
 
     f32 flip_mul = (f32)e->flipped * -2.0f + 1.0f;
@@ -360,7 +394,33 @@ entity_update(struct tagap_entity *e)
 
         // By default use entity position and normal rotation
         vec2s spr_pos = sprite_offset;
-        f32 spr_rot =  entity_get_rot(e) + sprite_rot_offset;
+        f32 spr_rot = entity_get_rot(e) + sprite_rot_offset;
+
+        // Notably used for the minigun gunentity
+        if (e->info->stats[STAT_MODELHACK])
+        {
+            mat3s mat = glms_rotate2d((mat3s)GLMS_MAT3_IDENTITY_INIT,
+                glm_rad(e->aim_angle));
+            vec3s offset =
+            {
+                spr->offset.x,
+                spr->offset.y,
+                0.0f,
+            };
+            // Really crazy fix; still isn't perfect either, the barrels are a
+            // bit weird looking...
+            if (spr->anim != ANIM_NONE)
+            {
+                offset.y = spr->offset.y +
+                    g_vulkan->textures[spr_r->tex].h -
+                    e->info->offsets[OFFSET_MODEL_OFFSET].y;
+            }
+            offset = glms_mat3_mulv(mat, offset);
+            spr_r->offset.x = offset.x;
+            spr_r->offset.y = offset.y;
+            spr_pos.x += e->info->offsets[OFFSET_MODEL_OFFSET].x;
+            spr_pos.y += e->info->offsets[OFFSET_MODEL_OFFSET].y;
+        }
 
         // Flip sprites based on entity facing
         SET_BIT(spr_r->flags, RENDERABLE_FLIPPED_BIT, e->flipped);
@@ -472,9 +532,50 @@ entity_update(struct tagap_entity *e)
             e->blink_timer += DT;
         } break;
 
+        // Attack panning (front/back/up/down).  Notably used for minigun belt
+        // and barrel animations
+        static const f32 PAN_SPEED = 64.0f;
+        case ANIM_PANATTF:
+            if (e->inputs.fire)
+            {
+                spr_r->tex_offset.x +=
+                    DT / g_vulkan->textures[spr_r->tex].w * PAN_SPEED;
+            }
+            break;
+        case ANIM_PANATTB:
+            if (e->inputs.fire)
+            {
+                spr_r->tex_offset.x -=
+                    DT / g_vulkan->textures[spr_r->tex].w * PAN_SPEED;
+            }
+            break;
+        case ANIM_PANATTD:
+            if (e->inputs.fire)
+            {
+                spr_r->tex_offset.y -=
+                    DT / g_vulkan->textures[spr_r->tex].h * PAN_SPEED;
+            }
+            break;
+        case ANIM_PANATTU:
+            if (e->inputs.fire)
+            {
+                spr_r->tex_offset.y +=
+                    DT / g_vulkan->textures[spr_r->tex].h * PAN_SPEED;
+            }
+            break;
         // No animation
         case ANIM_NONE:
         default: break;
+        }
+
+        if (spr->vars[SPRITEVAR_CHARGE])
+        {
+            // Weapon charge animation
+            const u32 maxframe = spr->info->frame_count - 1;
+            u32 index = (u32)ceil(clamp01(e->weapon_charge_timer /
+                e->weapon_charge_time) * (f32)maxframe);
+            spr_r->tex = spr->info->frames[index].tex;
+            spr_r->flags &= ~RENDERABLE_HIDDEN_BIT;
         }
 
         spr_r->pos = glms_vec2_add(e->position, spr_pos);
@@ -499,7 +600,7 @@ void
 entity_die(struct tagap_entity *e)
 {
     // Die effects/gibs (e.g. explosion, etc.) and SFX
-    // ...
+    //entity_fx_die();
 
     // Move missile back into pool if it is pooled
     if (!entity_pool_return(e))
@@ -622,6 +723,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
         entity_spawn(e->weapons[w].gunent);
 
         // Apply model offset
+    #if 0
         for (u32 s = 0; s < e->weapons[w].gunent->info->sprite_count; ++s)
         {
             // A bit dodgey?
@@ -633,6 +735,7 @@ create_gunent(struct tagap_entity *e, bool render_first)
                     missile_info->gun_entity->offsets[OFFSET_MODEL_OFFSET].y,
             };
         }
+    #endif
     }
 }
 
@@ -664,4 +767,28 @@ entity_change_weapon_slot(struct tagap_entity *e, i32 slot)
         missile_info->stats[STAT_MULTISHOT],
         1,
         WEAPON_MAX_MULTISHOT - 1);
+
+    // Whether to fire multiple bullets at once
+    e->weapon_rof = missile_info->stats[STAT_HIGHROF] > 0 ?
+        (missile_info->stats[STAT_HIGHROF] + 1) : 1;
+
+    // Reset timers
+    e->attack_timer = missile_info->think.attack_delay;
+    e->weapon_charge_timer = -1.0f;
+    e->weapon_charge_time = missile_info->stats[STAT_CHARGE] / 1000.0f;
+}
+
+static void
+entity_perform_trace(
+    struct tagap_entity *e,
+    f32 angle,
+    struct tagap_entity_trace *t)
+{
+    // Check for collisions from entity position to trace point
+#if 0
+    struct collision_trace_result result = { 0 };
+    collision_check_trace(e->position, angle, &result);
+    t->has_hit = result.hit;
+    t->point = result.point;
+#endif
 }

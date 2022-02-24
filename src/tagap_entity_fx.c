@@ -196,9 +196,9 @@ entity_fx_update(struct tagap_entity *e)
         };
 
         // Emit tracer for each multishot
-        for (u32 s = 0; s < e->weapon_multishot; ++s)
+        for (u32 shot = 0; shot < e->weapon_multishot * e->weapon_rof; ++shot)
         {
-            f32 angle = e->weapon_multishot_angles[s];
+            f32 angle = e->weapon_multishot_angles[shot];
             f32 c = cosf(glm_rad(angle)), s = sinf(glm_rad(angle));
             props.rot = angle * xflip,
             props.velo = (vec2s)
@@ -206,6 +206,14 @@ entity_fx_update(struct tagap_entity *e)
                 c * TRACER_SPEED * xflip,
                 s * TRACER_SPEED
             };
+            //props.has_precise_endpoint = e->weapon_traces[shot].has_hit;
+            //props.precise_endpoint = e->weapon_traces[shot].point;
+            //props.precise_endpoint = (vec2s)
+            //{
+            //    e->position.x + 200.0f,
+            //    e->position.y,
+            //};
+            //props.has_precise_endpoint = true;
             particle_emit(&props);
         }
     }
@@ -223,7 +231,7 @@ entity_fx_update(struct tagap_entity *e)
         .colour.end = { 1.0f, 1.0f, 1.0f, 0.0f },
         .lifetime = 0.4f,
     };
-    if (e->firing_now)
+    if (e->info->has_weapon && e->firing_now)
     {
         offset = glms_mat3_mulv(mat, (vec3s)
         {

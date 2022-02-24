@@ -8,7 +8,7 @@
  */
 
 // These theoretically would be in-game options
-#define TRIPLE_BUFFERING 1
+#define TRIPLE_BUFFERING 0
 #define VSYNC 1
 
 struct vulkan_swapchain

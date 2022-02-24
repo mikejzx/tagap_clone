@@ -194,7 +194,6 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         // List of linedefs styles that we actually draw
         { LINEDEF_STYLE_FLOOR, "(world-floor)", 0, 0, 0, 0 },
         { LINEDEF_STYLE_PLATE_FLOOR, "(world-plate)", 0, 0, 0, 0 },
-        { LINEDEF_STYLE_PLATE_CEILING, "(world-plate)", 0, 0, 0, 0 },
     };
 
     struct displayed_faded_linedef
@@ -207,7 +206,8 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
     } linfo_faded[] =
     {
         // List of linedefs to render with a 'fade' shader instead of a texture
-        { .style = LINEDEF_STYLE_CEILING, .height = 16.0f }
+        { .style = LINEDEF_STYLE_CEILING, .height = 16.0f },
+        { .style = LINEDEF_STYLE_PLATE_CEILING, .height = 16.0f }
     };
 
     static const u32 displayed_linedef_count =
