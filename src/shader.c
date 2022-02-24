@@ -133,12 +133,12 @@ g_shader_list[SHADER_COUNT] =
                 .format = VK_FORMAT_R32G32_SFLOAT,
                 .offset = offsetof(struct vertex_ptl, pos),
             },
-            // #2: opacity
+            // #2: vertex colour
             {
                 .binding = 0,
                 .location = 1,
-                .format = VK_FORMAT_R32_SFLOAT,
-                .offset = offsetof(struct vertex_ptl, opacity),
+                .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                .offset = offsetof(struct vertex_ptl, colour),
             },
             // #3: texture index
             {

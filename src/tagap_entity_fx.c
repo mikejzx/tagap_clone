@@ -153,9 +153,9 @@ entity_fx_update(struct tagap_entity *e)
         static const f32
             TRACER_W = 144.0f,
             TRACER_W_GROW = 0.75f,
-            TRACER_H = 16.0f,
+            TRACER_H = 20.0f,
             TRACER_H_GROW = 0.0f,
-            TRACER_SPEED = 3192.0f;
+            TRACER_SPEED = 3000.0f;
         struct particle_props props =
         {
             .type = PARTICLE_BEAM,
@@ -165,8 +165,16 @@ entity_fx_update(struct tagap_entity *e)
             .size_y.end = TRACER_H + TRACER_H * TRACER_H_GROW,
             .independent_sizes = true,
             .flip_x = !e->flipped,
-            .opacity.begin = 1.0f,
-            .opacity.end = 0.0f,
+            .colour.begin = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .colour.end = { 1.0f, 1.0f, 1.0f, 0.0f },
+            .vertex_colour_muls = true,
+            .vertex_colours =
+            {
+                [0] = { 1.0f, 0.7f, 0.2f, 1.0f },
+                [1] = { 1.0f, 0.7f, 0.2f, 1.0f },
+                [2] = { 0.6f, 0.2f, 0.2f, 1.0f },
+                [3] = { 0.6f, 0.2f, 0.2f, 1.0f },
+            },
             .lifetime = 0.15f,
         };
         offset = glms_mat3_mulv(mat, (vec3s)
@@ -211,8 +219,8 @@ entity_fx_update(struct tagap_entity *e)
         .type = PARTICLE_SMOKE,
         .size.begin = 24.0f,
         .size.end = 40.0f,
-        .opacity.begin = 0.6f,
-        .opacity.end = 0.0f,
+        .colour.begin = { 1.0f, 1.0f, 1.0f, 0.6f },
+        .colour.end = { 1.0f, 1.0f, 1.0f, 0.0f },
         .lifetime = 0.4f,
     };
     if (e->firing_now)
@@ -254,8 +262,8 @@ entity_fx_update(struct tagap_entity *e)
         .type = PARTICLE_SMOKE,
         .size.begin = 20.0f,
         .size.end = 48.0f,
-        .opacity.begin = 1.0f,
-        .opacity.end = 0.0f,
+        .colour.begin = { 1.0f, 1.0f, 1.0f, 1.0f },
+        .colour.end = { 1.0f, 1.0f, 1.0f, 0.0f },
         .lifetime = 0.75f,
     };
 

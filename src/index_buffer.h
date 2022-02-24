@@ -3,7 +3,7 @@
 
 #include "types.h"
 
-typedef u16 IB_TYPE;
+typedef u16 ib_type;
 static const VkIndexType IB_VKTYPE = VK_INDEX_TYPE_UINT16;
 
 struct ibuffer

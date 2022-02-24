@@ -47,6 +47,7 @@ struct particle_props
 {
     // Type of particle (determines texture index)
     enum particle_type type;
+    u32 tex_index;
 
     // Starting position/velocity of the particle
     vec2s pos, velo;
@@ -72,8 +73,14 @@ struct particle_props
     // Set to 0,0 for centred particle
     vec2s pivot_bias;
 
-    // Beginning and end opacity of particle
-    struct timed_f32 opacity;
+    // Beginning/end colours of particle
+    struct
+    {
+        vec4s begin, end, now;
+    } colour;
+
+    bool vertex_colour_muls;
+    vec4s vertex_colours[4];
 
     // Time in seconds that particle takes to die.
     f32 lifetime;
@@ -92,6 +99,11 @@ struct particle
     f32 life_remain;
 };
 
+struct quad_ptl
+{
+    struct vertex_ptl vertices[4];
+};
+
 // Manages all particles
 struct particle_system
 {
@@ -106,10 +118,7 @@ struct particle_system
 
     // Vertex buffer
     struct vertex_ptl *quad_buffer;
-    struct quad_ptl
-    {
-        struct vertex_ptl vertices[4];
-    } *quad_ptr;
+    struct quad_ptl *quad_ptr;
 
     // Staging buffer for copies
     VkBuffer staging_buf;

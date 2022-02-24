@@ -165,8 +165,8 @@ renderer_add_polygon(struct tagap_polygon *p)
 
     /* Calculate indices */
     i32 tri_count = p->point_count - 2;
-    size_t index_buf_size = sizeof(IB_TYPE) * tri_count * 3;
-    IB_TYPE *indices = alloca(index_buf_size);
+    size_t index_buf_size = sizeof(ib_type) * tri_count * 3;
+    ib_type *indices = alloca(index_buf_size);
     for (i32 i = 0; i < tri_count; ++i)
     {
         indices[i * 3 + 0] = 0;
@@ -187,7 +187,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
         enum tagap_linedef_style style;
         char tex[32];
         struct vertex *v;
-        IB_TYPE *i;
+        ib_type *i;
         size_t v_size, i_size;
     } linfo[] =
     {
@@ -201,7 +201,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
     {
         enum tagap_linedef_style style;
         struct vertex_vl *v;
-        IB_TYPE *i;
+        ib_type *i;
         size_t v_size, i_size;
         f32 height;
     } linfo_faded[] =
@@ -229,7 +229,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             if (ldefs[i].start.x == ldefs[i].end.x) continue;
 
             info->v_size += 4 * sizeof(struct vertex);
-            info->i_size += 6 * sizeof(IB_TYPE);
+            info->i_size += 6 * sizeof(ib_type);
         }
         if (!info->v_size || !info->i_size)
         {
@@ -369,7 +369,7 @@ renderer_add_linedefs(struct tagap_linedef *ldefs, size_t lc)
             if (ldefs[i].style != info->style) continue;
             if (ldefs[i].start.x == ldefs[i].end.x) continue;
             info->v_size += 4 * sizeof(struct vertex_vl);
-            info->i_size += 6 * sizeof(IB_TYPE);
+            info->i_size += 6 * sizeof(ib_type);
         }
         if (!info->v_size || !info->i_size)
         {
@@ -511,14 +511,14 @@ renderer_add_layer(struct tagap_layer *l, i32 z_offset)
             .texcoord = (vec2s) { 0.0f, 1.0f, },
         },
     };
-    static const IB_TYPE indices[3 * 4] =
+    static const ib_type indices[3 * 4] =
     {
         0, 1, 2,
         0, 2, 3
     };
 
     vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
-    ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
+    ib_new(&r->ib, indices, 3 * 4 * sizeof(ib_type));
 }
 
 /*
@@ -649,14 +649,14 @@ renderer_get_renderable_quad(struct renderable_quad_info *i)
         bounds_min.y = 0.0f;
         bounds_max.y = i->h;
     }
-    static const IB_TYPE indices[3 * 4] =
+    static const ib_type indices[3 * 4] =
     {
         0, 1, 2,
         0, 2, 3
     };
 
     vb_new(&r->vb, vertices, 4 * sizeof(struct vertex));
-    ib_new(&r->ib, indices, 3 * 4 * sizeof(IB_TYPE));
+    ib_new(&r->ib, indices, 3 * 4 * sizeof(ib_type));
 
     if (i->make_bounds)
     {
@@ -724,8 +724,8 @@ renderer_add_polygon_fade(struct tagap_polygon *p)
 
     // Calculate indices
     i32 tri_count = p->point_count - 2;
-    size_t index_buf_size = sizeof(IB_TYPE) * tri_count * 3;
-    IB_TYPE *indices = alloca(index_buf_size);
+    size_t index_buf_size = sizeof(ib_type) * tri_count * 3;
+    ib_type *indices = alloca(index_buf_size);
     for (i32 i = 0; i < tri_count; ++i)
     {
         indices[i * 3 + 0] = 0;

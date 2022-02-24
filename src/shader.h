@@ -80,13 +80,8 @@ struct push_constants_vl
 /* Vertex attributes for particle shader */
 struct vertex_ptl
 {
-    // Position of particle
     vec2s pos;
-
-    // Opacity of particle
-    f32 opacity;
-
-    // Texture index of particle
+    vec4s colour;
     i32 tex_index;
 };
 

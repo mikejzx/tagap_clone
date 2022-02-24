@@ -179,15 +179,22 @@ entity_update(struct tagap_entity *e)
             f32 ang_base = 5.0f * (e->weapon_multishot - 1);
             for (u32 s = 0; s < e->weapon_multishot; ++s)
             {
+                bool tracer = missile_info->stats[STAT_FX_BULLET];
+
                 f32 angle = lerpf(ang_base,
                     -ang_base, (f32)s / (e->weapon_multishot - 1))
                     + e->aim_angle;
+
+                if (tracer)
+                {
+                    angle += ((rand() % 10) - 5.0f);
+                }
 
                 // Store angle for tracer effects
                 e->weapon_multishot_angles[s] = angle;
 
                 // Spawn missile/projectile for each multishot.
-                if (!missile_info->stats[STAT_FX_BULLET])
+                if (!tracer)
                 {
                     entity_spawn_missile(e, missile_info, angle);
                 }

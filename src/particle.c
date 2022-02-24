@@ -53,13 +53,14 @@ particles_init(void)
     }
 
     // Generate vertex buffer
-    size_t vertices_size = MAX_PARTICLES * sizeof(struct vertex_ptl);
-    vb_new_empty(&g_parts->r->vb, vertices_size);
+    size_t vertices_size = MAX_PARTICLES * sizeof(struct quad_ptl);
+    vb_new_empty(&g_parts->r->vb, vertices_size, true);
 
     // Generate index buffer
+    g_parts->r->ib.index_count = 0;
     static const size_t INDEX_COUNT = MAX_PARTICLES * 3 * 2;
-    static const size_t INDICES_SIZE = INDEX_COUNT * sizeof(IB_TYPE);
-    IB_TYPE *indices = malloc(INDICES_SIZE);
+    static const size_t INDICES_SIZE = INDEX_COUNT * sizeof(ib_type);
+    ib_type *indices = malloc(INDICES_SIZE);
     size_t offset = 0;
     for (u32 i = 0; i < INDEX_COUNT; i += 6)
     {
@@ -74,65 +75,14 @@ particles_init(void)
     ib_new(&g_parts->r->ib, indices, INDICES_SIZE);
     free(indices);
 
-    // Set the index count to zero so we don't draw the (initially empty)
-    // vertex buffer.
-    g_parts->r->ib.index_count = 0;
-
-    // Create staging buffer
-    if (vulkan_create_buffer(
-        (VkDeviceSize)vertices_size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-            VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &g_parts->staging_buf, &g_parts->staging_buf_alloc) < 0)
-    {
-        LOG_ERROR("[particle] failed to create staging buffer");
-        return;
-    }
-
-    // Allocate command buffer for staging buffer-->vertex buffer copies on
-    // particle updates.  This should fix the massive particle slowdowns (500+
-    // FPS drops) we were having.
-    const VkCommandBufferAllocateInfo cmdbuf_alloc_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = g_vulkan->cmd_pool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    if (vkAllocateCommandBuffers(g_vulkan->d, &cmdbuf_alloc_info,
-        &g_parts->cmdbuf) != VK_SUCCESS)
-    {
-        LOG_ERROR("[particle] failed to allocate command buffer");
-        return;
-    }
-
-    static const VkFenceCreateInfo fence_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    };
-    if (vkCreateFence(g_vulkan->d, &fence_info, NULL,
-        &g_parts->fence) != VK_SUCCESS)
-    {
-        LOG_ERROR("[particle] failed to create buffer-copy fence!");
-        return;
-    }
-
     vmaMapMemory(g_vulkan->vma,
-        g_parts->staging_buf_alloc, (void **)&g_parts->quad_buffer);
+        g_parts->r->vb.vma_alloc, (void **)&g_parts->quad_buffer);
 }
 
 void
 particles_deinit(void)
 {
-    vmaUnmapMemory(g_vulkan->vma, g_parts->staging_buf_alloc);
-    vkDestroyFence(g_vulkan->d, g_parts->fence, NULL);
-    vmaDestroyBuffer(g_vulkan->vma,
-        g_parts->staging_buf, g_parts->staging_buf_alloc);
+    vmaUnmapMemory(g_vulkan->vma, g_parts->r->vb.vma_alloc);
     free(g_parts->pool);
     free(g_parts);
 }
@@ -144,10 +94,6 @@ particles_update(void)
     g_parts->quad_ptr = (struct quad_ptl *)g_parts->quad_buffer;
     g_parts->r->ib.index_count = 0;
 
-    /*
-     * Update particles, this will create writes to the mapped staging buffer
-     * memory
-     */
     for (u32 i = 0; i < MAX_PARTICLES; ++i)
     {
         struct particle *p = &g_parts->pool[i];
@@ -155,7 +101,7 @@ particles_update(void)
         // Don't update inactive particles
         if (!p->active) continue;
 
-        // Particle dies
+        // Dead particle
         if (p->life_remain <= 0.0f)
         {
             p->active = false;
@@ -182,10 +128,8 @@ particles_update(void)
         {
             p->props.size_y.now = p->props.size_x.now;
         }
-        p->props.opacity.now =
-            lerpf(p->props.opacity.begin, p->props.opacity.end, life_norm);
-
-        u32 tex_index = particle_lookup_tex_index(p->props.type);
+        p->props.colour.now = glms_vec4_lerp(
+            p->props.colour.begin, p->props.colour.end, life_norm);
 
         // Add the quad to the buffer
         f32 xflip = (f32)p->props.flip_x * -2.0f + 1.0f;
@@ -196,28 +140,32 @@ particles_update(void)
                     (p->props.pivot_bias.x * 0.5f - 0.5f) * xflip,
                     (p->props.pivot_bias.y * 0.5f - 0.5f)
                 },
-                p->props.opacity.now, tex_index
+                p->props.colour.now,
+                p->props.tex_index
             },
             {
                 {
                     (p->props.pivot_bias.x * 0.5f - 0.5f) * xflip,
                     (p->props.pivot_bias.y * 0.5f + 0.5f)
                 },
-                p->props.opacity.now, tex_index
+                p->props.colour.now,
+                p->props.tex_index
             },
             {
                 {
                     (p->props.pivot_bias.x * 0.5f + 0.5f) * xflip,
                     (p->props.pivot_bias.y * 0.5f + 0.5f)
                 },
-                p->props.opacity.now, tex_index
+                p->props.colour.now,
+                p->props.tex_index
             },
             {
                 {
                     (p->props.pivot_bias.x * 0.5f + 0.5f) * xflip,
                     (p->props.pivot_bias.y * 0.5f - 0.5f)
                 },
-                p->props.opacity.now, tex_index
+                p->props.colour.now,
+                p->props.tex_index
             },
         };
         mat4s model = glms_scale(glms_rotate_z(
@@ -238,33 +186,18 @@ particles_update(void)
             tmp = (vec4s){ vertices[v].pos.x, vertices[v].pos.y, 0.0f, 1.0f };
             tmp = glms_mat4_mulv(model, tmp);
             vertices[v].pos = (vec2s){ tmp.x, tmp.y };
+
+            if (p->props.vertex_colour_muls)
+            {
+                vertices[v].colour = glms_vec4_mul(
+                    vertices[v].colour, p->props.vertex_colours[v]);
+            }
         }
         // Note we must write sequentially here as we declared
         // VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
         memcpy(g_parts->quad_ptr++, vertices, sizeof(struct quad_ptl));
         g_parts->r->ib.index_count += 6;
     }
-
-    /*
-     * End batch: unmap staging buffer, copy the data into the vertex buffer
-     */
-    if ((struct vertex_ptl *)g_parts->quad_ptr == g_parts->quad_buffer)
-    {
-        return;
-    }
-    if (vulkan_copy_buffer_using_cmdbuffer(
-        g_parts->cmdbuf,
-        g_parts->fence,
-        g_parts->staging_buf,
-        g_parts->r->vb.vk_buffer,
-        (size_t)(
-            (struct vertex_ptl *)g_parts->quad_ptr -
-            g_parts->quad_buffer) * sizeof(struct vertex_ptl)) < 0)
-    {
-        LOG_ERROR("[vbuffer] failed to copy staging buffer to vertex buffer");
-        g_parts->r->ib.index_count = 0;
-    }
-    // The buffer is now ready to be rendered
 }
 
 void
@@ -276,6 +209,7 @@ particle_emit(struct particle_props *props)
     p->active = true;
     p->props = *props;
     p->life_remain = props->lifetime;
+    p->props.tex_index = particle_lookup_tex_index(p->props.type);
 
     // Adjust index, just wrap back around when we run out
     --g_parts->index;
