@@ -120,9 +120,6 @@ struct quad_ptl
 // Manages all particles
 struct particle_system
 {
-    // Main renderable that we give to the renderer
-    struct renderable *r;
-
     // Particle pool
     struct particle *pool;
 
@@ -130,16 +127,18 @@ struct particle_system
     u32 index;
 
     // Vertex buffer
-    struct vertex_ptl *quad_buffer;
-    struct quad_ptl *quad_ptr;
+    struct particle_frame
+    {
+        struct vbuffer vb;
+        struct vertex_ptl *quad_buffer;
+        struct quad_ptl *quad_ptr;
 
-    // Staging buffer for copies
-    VkBuffer staging_buf;
-    VmaAllocation staging_buf_alloc;
+        u32 index_count;
+    } *frames;
+    u32 frame_count;
 
-    // Command buffer for copy operation
-    VkCommandBuffer cmdbuf;
-    VkFence fence;
+    // Single index buffer for all frames
+    struct ibuffer ib;
 
     // List of loaded texture indices
     i32 tex_indices[_PARTICLE_COUNT];
@@ -150,6 +149,7 @@ extern struct particle_system *g_parts;
 void particles_init(void);
 void particles_deinit(void);
 void particles_update(void);
+void particles_update_frame(u32);
 void particle_emit(struct particle_props *);
 
 #endif

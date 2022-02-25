@@ -7,6 +7,7 @@
 #include "vulkan_renderer.h"
 #include "vulkan_swapchain.h"
 #include "shader.h"
+#include "particle.h"
 
 #define MAX_FRAMES_IN_FLIGHT 2
 
@@ -1096,8 +1097,10 @@ vulkan_record_command_buffers(
 
         // We don't use the subpass 2 shader, as we're still in subpass 1...
         // Also don't render lights twice
+        // Particles are now rendered separately also
         if (shader_id == SHADER_SCREENSUBPASS ||
-            shader_id == SHADER_LIGHT ) continue;
+            shader_id == SHADER_LIGHT ||
+            shader_id == SHADER_PARTICLE) continue;
 
         struct renderable *objs = objgrps[shader_id].objs;
         u32 obj_count = objgrps[shader_id].obj_count;
@@ -1131,6 +1134,69 @@ vulkan_record_command_buffers(
             vulkan_record_obj_command_buffer(cbuf,
                 &objs[o], &g_shader_list[shader_id], shader_id, cam_pos);
         }
+    }
+
+    /*
+     * Render particles
+     * Done seperately to make management of the seperate vertex buffers
+     * (foreach swapchain image) easier
+     */
+    struct shader *part_s = &g_shader_list[SHADER_PARTICLE];
+    struct particle_frame *part_f = &g_parts->frames[cur_image_index];
+    if (part_f->index_count)
+    {
+        vkCmdBindPipeline(cbuf,
+            VK_PIPELINE_BIND_POINT_GRAPHICS, part_s->pipeline);
+
+        // Bind vertex and index buffers
+        static const VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(cbuf,
+            0,
+            1,
+            &part_f->vb.vk_buffer,
+            &offset);
+        vkCmdBindIndexBuffer(cbuf,
+            g_parts->ib.vk_buffer,
+            0,
+            IB_VKTYPE);
+
+        // Apply camera position
+        mat4s mat = glms_translate((mat4s)GLMS_MAT4_IDENTITY_INIT, (vec3s)
+        {
+            -cam_pos->x,
+            -cam_pos->y,
+            0.0f
+        });
+        mat.raw[1][1] *= -1.0f;
+
+        // Push constants
+        struct push_constants_ptl pconsts =
+        {
+            .mvp = glms_mat4_mul(glms_ortho(
+                0.0f, WIDTH_INTERNAL,
+                0.0f, HEIGHT_INTERNAL,
+                -225.0f, 225.0f), mat)
+        };
+        vkCmdPushConstants(cbuf,
+            part_s->pipeline_layout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            part_s->pconst_size,
+            &pconsts);
+
+        // Bind descriptor sets
+        vkCmdBindDescriptorSets(cbuf,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            part_s->pipeline_layout,
+            0, 1,
+            &g_vulkan->desc_sets[cur_image_index],
+            0, NULL);
+
+        // Draw!
+        vkCmdDrawIndexed(cbuf,
+            part_f->index_count,
+            1, 0, 0, 0);
+        ++g_state.draw_calls;
     }
 
     /*
@@ -1280,7 +1346,7 @@ vulkan_record_obj_command_buffer(
         };
         memcpy(pconsts, &p, pconst_size);
     }
-    else if (shader_id == SHADER_VERTEXLIT || shader_id == SHADER_PARTICLE)
+    else if (shader_id == SHADER_VERTEXLIT)
     {
         struct push_constants_vl p =
         {
@@ -1465,6 +1531,9 @@ vulkan_render_frame_pre(void)
         in_flight_fences[cur_frame];
 
     vkResetFences(g_vulkan->d, 1, &in_flight_fences[cur_frame]);
+
+    // Update particles for this frame
+    particles_update_frame(cur_image_index);
 
     // Record commands
     // ... done via vulkan_record_command_buffers

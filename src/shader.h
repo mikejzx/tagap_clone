@@ -14,8 +14,10 @@ enum shader_type
 {
     SHADER_DEFAULT = 0,
     SHADER_DEFAULT_NO_ZBUFFER, // Default without depth testing
-    SHADER_PARTICLE,
     SHADER_VERTEXLIT,
+
+    // Particle shader; rendered separately from everything else
+    SHADER_PARTICLE,
 
     // Light rendering shader, used only in the light render pass
     SHADER_LIGHT,

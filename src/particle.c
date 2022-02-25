@@ -2,6 +2,7 @@
 #include "tagap.h"
 #include "renderer.h"
 #include "vulkan_renderer.h"
+#include "vulkan_swapchain.h"
 #include "particle.h"
 
 struct particle_system *g_parts;
@@ -38,13 +39,9 @@ particles_init(void)
     // Render from top down
     g_parts->index = MAX_PARTICLES - 1;
 
-    // For now we just use a regular renderable from the renderer
-    g_parts->r = renderer_get_renderable(SHADER_PARTICLE);
-    if (!g_parts->r)
-    {
-        return;
-    }
-    g_parts->r->flags |= RENDERABLE_NO_CULL_BIT;
+    g_parts->frame_count = g_vulkan->swapchain->image_count;
+    g_parts->frames = 
+        malloc(sizeof(struct particle_frame) * g_parts->frame_count);
 
     // Set textures to -1 by default to make lookup work
     for (u32 i = 0; i < _PARTICLE_COUNT; ++i)
@@ -52,12 +49,8 @@ particles_init(void)
         g_parts->tex_indices[i] = -1;
     }
 
-    // Generate vertex buffer
-    size_t vertices_size = MAX_PARTICLES * sizeof(struct quad_ptl);
-    vb_new_empty(&g_parts->r->vb, vertices_size, true);
-
     // Generate index buffer
-    g_parts->r->ib.index_count = 0;
+    g_parts->ib.index_count = 0;
     static const size_t INDEX_COUNT = MAX_PARTICLES * 3 * 2;
     static const size_t INDICES_SIZE = INDEX_COUNT * sizeof(ib_type);
     ib_type *indices = malloc(INDICES_SIZE);
@@ -72,17 +65,34 @@ particles_init(void)
         indices[i + 5] = 0 + offset;
         offset += 4;
     }
-    ib_new(&g_parts->r->ib, indices, INDICES_SIZE);
+    ib_new(&g_parts->ib, indices, INDICES_SIZE);
     free(indices);
 
-    vmaMapMemory(g_vulkan->vma,
-        g_parts->r->vb.vma_alloc, (void **)&g_parts->quad_buffer);
+    const size_t vertices_size = MAX_PARTICLES * sizeof(struct quad_ptl);
+    for (u32 f = 0; f < g_parts->frame_count; ++f)
+    {
+        struct particle_frame *frame = &g_parts->frames[f];
+
+        // Generate vertex buffers
+        vb_new_empty(&frame->vb, vertices_size, true);
+
+        // Map to the vertex buffer directly
+        vmaMapMemory(g_vulkan->vma,
+            frame->vb.vma_alloc, (void **)&frame->quad_buffer);
+    }
 }
 
 void
 particles_deinit(void)
 {
-    vmaUnmapMemory(g_vulkan->vma, g_parts->r->vb.vma_alloc);
+    for (u32 f = 0; f < g_parts->frame_count; ++f)
+    {
+        struct particle_frame *frame = &g_parts->frames[f];
+        vmaUnmapMemory(g_vulkan->vma, frame->vb.vma_alloc);
+        vb_free(&frame->vb);
+    }
+    ib_free(&g_parts->ib);
+    free(g_parts->frames);
     free(g_parts->pool);
     free(g_parts);
 }
@@ -90,10 +100,7 @@ particles_deinit(void)
 void
 particles_update(void)
 {
-    /* Begin render batch */
-    g_parts->quad_ptr = (struct quad_ptl *)g_parts->quad_buffer;
-    g_parts->r->ib.index_count = 0;
-
+    // Update all particle states
     for (u32 i = 0; i < MAX_PARTICLES; ++i)
     {
         struct particle *p = &g_parts->pool[i];
@@ -180,8 +187,25 @@ particles_update(void)
         }
         p->props.colour.now = glms_vec4_lerp(
             p->props.colour.begin, p->props.colour.end, life_norm);
+    }
+}
 
-        // Add the quad to the buffer
+void
+particles_update_frame(u32 frame_index)
+{
+    struct particle_frame *frame = &g_parts->frames[frame_index];
+
+    /* Begin render batch */
+    frame->quad_ptr = (struct quad_ptl *)frame->quad_buffer;
+    frame->index_count = 0;
+
+    for (u32 i = 0; i < MAX_PARTICLES; ++i)
+    {
+        struct particle *p = &g_parts->pool[i];
+
+        // Don't add inactive particles
+        if (!p->active) continue;
+
         f32 xflip = (f32)p->props.flip_x * -2.0f + 1.0f;
         struct vertex_ptl vertices[4] =
         {
@@ -244,9 +268,8 @@ particles_update(void)
             }
         }
         // Note we must write sequentially here as we declared
-        // VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-        memcpy(g_parts->quad_ptr++, vertices, sizeof(struct quad_ptl));
-        g_parts->r->ib.index_count += 6;
+        memcpy(frame->quad_ptr++, vertices, sizeof(struct quad_ptl));
+        frame->index_count += 6;
     }
 }
 
