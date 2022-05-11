@@ -40,7 +40,7 @@ particles_init(void)
     g_parts->index = MAX_PARTICLES - 1;
 
     g_parts->frame_count = g_vulkan->swapchain->image_count;
-    g_parts->frames = 
+    g_parts->frames =
         malloc(sizeof(struct particle_frame) * g_parts->frame_count);
 
     // Set textures to -1 by default to make lookup work
@@ -128,6 +128,7 @@ particles_update(void)
         if (p->props.has_precise_endpoint)
         {
             // Adjusted endpoint (to account for pivot)
+        #if 1
             vec2s ep = (vec2s)
             {
                 p->props.precise_endpoint.x + lerpf(
@@ -146,6 +147,13 @@ particles_update(void)
                 sign(p->props.pos.x - ep.x),
                 sign(p->props.pos.y - ep.y),
             };
+        #else
+            vec2s diff_sgn = (vec2s)
+            {
+                sign(p->props.pos.x - p->props.precise_endpoint.x),
+                sign(p->props.pos.y - p->props.precise_endpoint.y),
+            };
+        #endif
             bool eq_sgn_x = diff_sgn.x == p->old_diff_sgn.x,
                  eq_sgn_y = diff_sgn.y == p->old_diff_sgn.y;
             if (p->old_diff_sgn_init &&
@@ -155,10 +163,12 @@ particles_update(void)
                 if (!eq_sgn_x)
                 {
                     p->props.pos.x = ep.x;
+                    //p->props.pos.x = p->props.precise_endpoint.x;
                 }
                 if (!eq_sgn_y)
                 {
-                    //p->props.pos.y = ep.y;
+                    p->props.pos.y = ep.y;
+                    //p->props.pos.y = p->props.precise_endpoint.y;
                 }
             }
             p->old_diff_sgn = diff_sgn;
@@ -170,7 +180,7 @@ particles_update(void)
 
         // Update position, rotation, etc.
         p->props.pos =
-            glms_vec2_add(p->props.pos, glms_vec2_scale(p->props.velo, DT));
+            glms_vec2_add(p->props.pos, glms_vec2_scale(p->velo, DT));
         p->props.rot += p->props.rot_speed * DT;
 
         // Linearly interpolate properties
@@ -283,6 +293,28 @@ particle_emit(struct particle_props *props)
     p->props = *props;
     p->life_remain = props->lifetime;
     p->props.tex_index = particle_lookup_tex_index(p->props.type);
+
+    if (p->props.has_precise_endpoint)
+    {
+        // We need to reach a specific point so instead of using given
+        // direction we calculate the direction we need
+        p->velo = glms_vec2_scale(
+            glms_vec2_normalize(
+                glms_vec2_sub(
+                    p->props.precise_endpoint,
+                    p->props.pos)),
+            fabs(p->props.speed));
+        p->props.rot = glm_deg(atanf(p->velo.y / p->velo.x));
+    }
+    else
+    {
+        // Just calculate regular velocity from the given direction
+        p->velo = (vec2s)
+        {
+            cosf(glm_rad(p->props.dir)) * p->props.speed,
+            sinf(glm_rad(p->props.dir)) * p->props.speed,
+        };
+    }
 
     // Adjust index, just wrap back around when we run out
     --g_parts->index;

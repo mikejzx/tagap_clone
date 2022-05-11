@@ -1,6 +1,9 @@
 Makefile.old
 data/*
+data_add/*
 lib/*
 tmpfs_env.sh
 bin/*
 shader/*.spv
+*.patch
+*.tar.xz

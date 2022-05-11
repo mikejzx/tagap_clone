@@ -732,6 +732,28 @@ tagap_script_run_cmd_in_state(
         };
     } break;
 
+    // Adds effect to entity event
+    case ATOM_EFFECT:
+    {
+        struct tagap_entity_info *e =
+            &g_level->entity_infos[g_level->entity_info_count - 1];
+
+        if (ss->tok[0].i < 0 || ss->tok[0].i >= EFFECT_EVENT_COUNT)
+        {
+            SCRIPT_ERROR("EFFECT: invalid event %d", ss->tok[0].i);
+            return -1;
+        }
+        if (ss->tok[1].i < 0 || ss->tok[1].i >= EFFECT_COUNT)
+        {
+            SCRIPT_ERROR("EFFECT: invalid effect %d", ss->tok[1].i);
+            return -1;
+        }
+        // Unimplemented event effect
+        if (ss->tok[1].i == 0) return 0;
+
+        e->event_effects[ss->tok[0].i].effects[ss->tok[1].i] = true;
+    } break;
+
     // Sets a weapon slot
     case ATOM_WEAPON:
     {

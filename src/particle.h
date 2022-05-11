@@ -49,8 +49,14 @@ struct particle_props
     enum particle_type type;
     u32 tex_index;
 
-    // Starting position/velocity of the particle
-    vec2s pos, velo;
+    // Starting position of the particle
+    vec2s pos;
+
+    // Initial velocity angle of particle (deg)
+    f32 dir;
+
+    // Initial speed of particle
+    f32 speed;
 
     // Starting rotation of the particle
     f32 rot;
@@ -100,6 +106,9 @@ struct particle
 
     // Properties of the particle
     struct particle_props props;
+
+    // Particle velocity
+    vec2s velo;
 
     // Time left until particle dies.
     f32 life_remain;

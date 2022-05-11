@@ -224,7 +224,17 @@ entity_update(struct tagap_entity *e)
                 else
                 {
                     // Perform trace attack
-                    entity_perform_trace(e, angle, &e->weapon_traces[s]);
+                    f32 a = angle;
+                    if (e->flipped)
+                    {
+                        a = 180.f - a;
+                    }
+                    else if (a < 0.0f)
+                    {
+                        a += 360.0f;
+                    }
+                    e->weapon_multishot_angles[s] = a;
+                    entity_perform_trace(e, a, &e->weapon_traces[s]);
                 }
             }
 
@@ -600,7 +610,7 @@ void
 entity_die(struct tagap_entity *e)
 {
     // Die effects/gibs (e.g. explosion, etc.) and SFX
-    //entity_fx_die();
+    entity_fx_die(e);
 
     // Move missile back into pool if it is pooled
     if (!entity_pool_return(e))
@@ -785,10 +795,8 @@ entity_perform_trace(
     struct tagap_entity_trace *t)
 {
     // Check for collisions from entity position to trace point
-#if 0
     struct collision_trace_result result = { 0 };
-    collision_check_trace(e->position, angle, &result);
+    collision_check_trace(e, e->position, angle, 500.0f, &result);
     t->has_hit = result.hit;
     t->point = result.point;
-#endif
 }

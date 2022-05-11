@@ -141,8 +141,6 @@ entity_fx_update(struct tagap_entity *e)
 
     // Aim angle with some randomisation
     f32 ang = e->aim_angle + (f32)((rand() % 100 - 50) / 2.0f);
-    f32 ang_cos = cosf(glm_rad(ang));
-    f32 ang_sin = sinf(glm_rad(ang));
 
     /*
      * Bullet effect for trace attacks.  These are not actual projectiles and
@@ -192,28 +190,26 @@ entity_fx_update(struct tagap_entity *e)
         };
         props.pivot_bias = (vec2s)
         {
-            -0.7f, 0.0f
+            //-0.7f, 0.0f
+            -1.0f, 0.0f
         };
 
         // Emit tracer for each multishot
         for (u32 shot = 0; shot < e->weapon_multishot * e->weapon_rof; ++shot)
         {
             f32 angle = e->weapon_multishot_angles[shot];
-            f32 c = cosf(glm_rad(angle)), s = sinf(glm_rad(angle));
-            props.rot = angle * xflip,
-            props.velo = (vec2s)
+            props.rot = angle;
+            props.dir = angle;
+            props.speed = TRACER_SPEED;
+            if (xflip < 0.0f)
             {
-                c * TRACER_SPEED * xflip,
-                s * TRACER_SPEED
-            };
-            //props.has_precise_endpoint = e->weapon_traces[shot].has_hit;
-            //props.precise_endpoint = e->weapon_traces[shot].point;
-            //props.precise_endpoint = (vec2s)
-            //{
-            //    e->position.x + 200.0f,
-            //    e->position.y,
-            //};
-            //props.has_precise_endpoint = true;
+                props.rot += 180.0f;
+            }
+            if (!e->weapon_traces[shot].has_hit)
+            {
+            }
+            props.has_precise_endpoint = e->weapon_traces[shot].has_hit;
+            props.precise_endpoint = e->weapon_traces[shot].point;
             particle_emit(&props);
         }
     }
@@ -246,11 +242,9 @@ entity_fx_update(struct tagap_entity *e)
             e->position.y + offset.y +
                 missile->offsets[OFFSET_WEAPON_ORIGIN].y,
         };
-        props.velo = (vec2s)
-        {
-            ang_cos * FIRE_SMOKE_VELO * xflip,
-            ang_sin * FIRE_SMOKE_VELO,
-        };
+        props.speed = FIRE_SMOKE_VELO * xflip;
+        props.dir = ang * xflip;
+
         // Emit weapon fire smoke
         particle_emit(&props);
     }
@@ -289,11 +283,8 @@ entity_fx_update(struct tagap_entity *e)
         e->position.y + offset.y +
             e->info->offsets[OFFSET_MODEL_OFFSET].y,
     };
-    props.velo = (vec2s)
-    {
-        ang_cos * SMOKE_TRAIL_VELO * xflip,
-        ang_sin * SMOKE_TRAIL_VELO,
-    };
+    props.speed = SMOKE_TRAIL_VELO * xflip;
+    props.dir = ang * xflip;
 
     // Emit smoke trail
     particle_emit(&props);
@@ -495,4 +486,60 @@ entity_fx_init_flashlight(struct tagap_entity *e)
         fx->r_flashlight->bounds.max.y);
 
     return 0;
+}
+
+void
+entity_fx_die(struct tagap_entity *e)
+{
+    for (enum tagap_entity_effect_id effect = 0;
+        effect < EFFECT_COUNT;
+        ++effect)
+    {
+        if (!e->info->event_effects[EFFECT_EVENT_GIB].effects[effect]) continue;
+
+        switch(effect)
+        {
+        // Explosion effect
+        case EFFECT_EXPLOSION:
+        {
+            // TODO: read from splash damage
+            f32 explode_size = 128.0f;
+            static const f32 explode_velo = 8.0f;
+            static const u32 explode_part_count = 6;
+
+            // Spew some smoke clouds
+            struct particle_props props =
+            {
+                .type = PARTICLE_SMOKE,
+                .size.begin = explode_size,
+                .size.end = explode_size * 2.0f,
+                .colour.begin = { 0.0f, 0.0f, 0.0f, 0.6f },
+                .colour.end = { 1.0f, 1.0f, 1.0f, 0.0f },
+                .lifetime = 1.0f * explode_size / 128.0f,
+            };
+
+            for (u32 p = 0; p < explode_part_count; ++p)
+            {
+                props.pos = (vec2s)
+                {
+                    e->position.x +
+                        (f32)((rand() % 10) - 5) * explode_size / 10.0f,
+                    e->position.y +
+                        (f32)((rand() % 10) - 5) * explode_size / 10.0f,
+                };
+                props.speed = explode_velo;
+                props.dir = (f32)(rand() % 360);
+
+                // Emit smoke trail
+                particle_emit(&props);
+            }
+        } break;
+
+        // Unimplemented
+        default:
+        {
+            LOG_WARN("[tagap_entity_fx] unimplemented effect %d", effect);
+        } break;
+        }
+    }
 }

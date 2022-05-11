@@ -59,6 +59,7 @@ enum tagap_script_atom_id
     ATOM_GUNENTITY,
     ATOM_LIGHT,
     ATOM_FLASHLIGHT,
+    ATOM_EFFECT,
     ATOM_WEAPON,
     ATOM_LAYER,
     ATOM_TRIGGER,
@@ -482,6 +483,25 @@ TAGAP_SCRIPT_COMMANDS[] =
         },
         .requires_mode = true,
         .required_mode = TAGAP_PARSE_ENTITY,
+    },
+    // Add effect to entity event
+    [ATOM_EFFECT] =
+    {
+        .name = "EFFECT",
+        .token_count = 2,
+        .tokens =
+        {
+            // #1: event tag
+            { 
+                .type = TSCRIPT_TOKEN_LOOKUP, 
+                .lookup_func = lookup_tagap_effect_event 
+            },
+            // #2: effect to add
+            {
+                .type = TSCRIPT_TOKEN_LOOKUP,
+                .lookup_func = lookup_tagap_effect
+            },
+        },
     },
     // Defines a weapon slot
     [ATOM_WEAPON] =

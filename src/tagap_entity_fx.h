@@ -23,6 +23,7 @@ struct tagap_entity_fx
 i32 entity_fx_init(struct tagap_entity *);
 void entity_fx_toggle(struct tagap_entity_fx *, bool);
 void entity_fx_update(struct tagap_entity *);
+void entity_fx_die(struct tagap_entity *);
 
 inline void
 entity_fx_reset(struct tagap_entity_fx *fx)

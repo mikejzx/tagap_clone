@@ -12,7 +12,7 @@
 
 struct renderer g_renderer;
 
-int
+i32
 renderer_init(SDL_Window *winhandle)
 {
     assert((sizeof(MAX_OBJECTS) / sizeof(const u32)) == SHADER_COUNT);

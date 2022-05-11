@@ -23,6 +23,10 @@ main (i32 argc, char **argv)
     memset(&g_state, 0, sizeof(struct tagap));
     g_state.type = GAME_STATE_BOOT;
     vulkan_renderer_init_state();
+    if (sfx_init() < 0)
+    {
+        LOG_ERROR("[fatal] failed to initialise the sound engine");
+    }
 
     level_init();
 
@@ -32,7 +36,7 @@ main (i32 argc, char **argv)
     // Set up SDL window
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
     {
-        LOG_ERROR("failed to initialise SDL");
+        LOG_ERROR("[fatal] failed to initialise SDL");
         return -1;
     }
     SDL_Window *win_handle = SDL_CreateWindow(
@@ -43,8 +47,9 @@ main (i32 argc, char **argv)
         /*| SDL_WINDOW_FULLSCREEN_DESKTOP*/);
     if (!win_handle)
     {
-        LOG_ERROR("failed to create window handle.  Perhaps libsdl2 was "
-            "not built with required features?");
+        LOG_ERROR("[fatal] "
+            "failed to create window handle.  Perhaps libsdl2 was "
+            "not built with required features? (e.g. vulkan)");
         goto game_quit;
     }
 
@@ -202,6 +207,7 @@ main (i32 argc, char **argv)
 game_quit:
 
     level_deinit();
+    sfx_deinit();
     renderer_deinit();
 
     // Deinitialise SDL

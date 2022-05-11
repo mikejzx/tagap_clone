@@ -25,6 +25,10 @@
 #include <cglm/struct.h>
 #include <vk_mem_alloc.h>
 #include <stb_image.h>
+#define AL_API extern
+#define ALC_API extern
+#include <AL/al.h>
+#include <AL/alc.h>
 
 // Local includes
 #include "types.h"

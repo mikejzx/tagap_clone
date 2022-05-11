@@ -8,11 +8,13 @@ CFLAGS_ALL=-D_GNU_SOURCE -Wall -std=c99
 CFLAGS_RELEASE=$(CFLAGS_ALL) -march=native -mtune=native -O2
 CFLAGS_DEBUG=$(CFLAGS_ALL) -Og -g -DDEBUG -Wno-missing-braces
 
+# Note the dependency paths here
 LDFLAGS=-lm -lpthread -lvulkan \
 	-lSDL2main $(shell pkg-config --libs --cflags sdl2) \
 	-Ilib/cglm/include -Llib/cglm/build -l:libcglm.a \
 	-Ilib/vma/include -Llib/vma/build/src -lVulkanMemoryAllocator \
-	-Ilib/stb_image -Llib/stb_image -l:libstb_image.a
+	-Ilib/stb_image -Llib/stb_image -l:libstb_image.a \
+	-Ilib/mojoal -Llib/mojoal -l:libmojoal.a
 
 # 'MODE' environment variable used to make distribution build
 ifeq ($(MODE),dist)

@@ -4,6 +4,7 @@
 #include "state_level.h"
 #include "state_menu.h"
 #include "vulkan_renderer.h"
+#include "sfx.h"
 
 // TAGAP data directory.  May make this adjustable
 //#define TAGAP_DATA_DIR "/home/mike/games/TAGAP/data"
@@ -49,6 +50,9 @@ struct tagap
 
     // Renderer
     struct vulkan_renderer vulkan;
+
+    // Sound manager
+    struct sfx_manager sfx;
 
     // Internal state
     u64 now, last_frame, last_sec;

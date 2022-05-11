@@ -113,6 +113,54 @@ static const char *OFFSET_NAMES[] =
 
 CREATE_LOOKUP_FUNC(lookup_tagap_offset, OFFSET_NAMES, ENTITY_OFFSET_COUNT);
 
+enum tagap_entity_effect_event_id
+{
+    EFFECT_EVENT_UNKNOWN = 0,
+    EFFECT_EVENT_DYING,  // Entity falls apart before dying
+    EFFECT_EVENT_GIB,    // Entity blows apart
+    EFFECT_EVENT_WEAPON, // Attacks via entity shooting
+
+    EFFECT_EVENT_COUNT
+};
+
+static const char *EFFECT_EVENT_NAMES[] =
+{
+    [EFFECT_EVENT_UNKNOWN] = "",
+    [EFFECT_EVENT_DYING]   = "DYING",
+    [EFFECT_EVENT_GIB]     = "GIB",
+    [EFFECT_EVENT_WEAPON]  = "WEAPON",
+};
+
+CREATE_LOOKUP_FUNC(lookup_tagap_effect_event,
+    EFFECT_EVENT_NAMES, EFFECT_EVENT_COUNT);
+
+enum tagap_entity_effect_id
+{
+    EFFECT_UNKNOWN = 0,
+    EFFECT_EXPLOSION,
+    EFFECT_EXPLOSION_PLASMA,
+    EFFECT_SPARKS,
+    EFFECT_IMPACT,
+    EFFECT_TELEIN,
+    EFFECT_TELEOUT,
+
+    EFFECT_COUNT
+};
+
+static const char *EFFECT_NAMES[] =
+{
+    [EFFECT_UNKNOWN]           = "",
+    [EFFECT_EXPLOSION]         = "EXPLOSION",
+    [EFFECT_EXPLOSION_PLASMA]  = "EXPLOSION_PLASMA",
+    [EFFECT_SPARKS]            = "SPARKS",
+    [EFFECT_IMPACT]            = "IMPACT",
+    [EFFECT_TELEIN]            = "TELEIN",
+    [EFFECT_TELEOUT]           = "TELEOUT",
+};
+
+CREATE_LOOKUP_FUNC(lookup_tagap_effect,
+    EFFECT_NAMES, EFFECT_COUNT);
+
 // Info loaded once globally at start of game
 struct tagap_entity_info
 {
@@ -166,6 +214,11 @@ struct tagap_entity_info
         vec3s colour;
     } flashlight;
 
+    struct tagap_entity_effect
+    {
+        bool effects[EFFECT_COUNT];
+    } event_effects[EFFECT_EVENT_COUNT];
+
     // NOTE: make sure to add any new members to entity_info_clone!
 };
 
@@ -196,6 +249,7 @@ entity_info_clone(
     memcpy(&a->light, &b->light, sizeof(struct tagap_entity_light));
     memcpy(&a->flashlight, &b->flashlight,
         sizeof(struct tagap_entity_flashlight));
+    memcpy(a->event_effects, b->event_effects, sizeof(a->event_effects));
 }
 
 struct tagap_entity
